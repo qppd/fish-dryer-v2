@@ -1,8 +1,8 @@
-// SHT31_SENSOR.h
+// SHT31_CONFIG.h
 // SHT31 temperature and humidity sensor integration
 
-#ifndef SHT31_SENSOR_H
-#define SHT31_SENSOR_H
+#ifndef SHT31_CONFIG_H
+#define SHT31_CONFIG_H
 
 #include <Wire.h>
 #include "Adafruit_SHT31.h"
@@ -31,4 +31,4 @@ void readSHT31() {
   }
 }
 
-#endif // SHT31_SENSOR_H
+#endif // SHT31_CONFIG_H

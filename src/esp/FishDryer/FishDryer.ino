@@ -2,7 +2,7 @@
 // ESP-based fish dryer controller
 
 #include "SSR_CONFIG.h"
-#include "SHT31_SENSOR.h"
+#include "SHT31_CONFIG.h"
 #include "LOADCELL_CONFIG.h"
 
 void setup() {
