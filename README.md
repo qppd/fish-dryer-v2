@@ -124,5 +124,16 @@ All hardware pin assignments are set in `PINS_CONFIG.h`. Each module header incl
 ## Contributing
 Contributions are welcome! Please fork the repository and submit a pull request. For major changes, open an issue first to discuss your proposal.
 
+
 ## License
 This project is licensed under the terms of the MIT License. See the `LICENSE` file for details.
+
+---
+
+## Contact & Community
+
+- **Email:** quezon.province.pd@gmail.com
+- **GitHub:** https://github.com/qppd
+- **Portfolio:** https://sajed-mendoza.onrender.com
+- **Facebook:** https://facebook.com/qppd.dev
+- **Community:** https://facebook.com/QUEZONPROVINCEDEVS
