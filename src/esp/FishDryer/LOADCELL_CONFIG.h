@@ -6,8 +6,8 @@
 
 #include "HX711.h"
 
-#define LOADCELL_DOUT_PIN 7 // Example GPIO pin for HX711 DOUT
-#define LOADCELL_SCK_PIN 8  // Example GPIO pin for HX711 SCK
+#define LOADCELL_DOUT_PIN 34 // HX711 DOUT (ESP32 input-only GPIO is fine here)
+#define LOADCELL_SCK_PIN 27  // HX711 SCK (ESP32 safe output GPIO)
 
 HX711 scale;
 
