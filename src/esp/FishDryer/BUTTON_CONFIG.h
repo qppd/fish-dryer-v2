@@ -4,6 +4,8 @@
 #ifndef BUTTON_CONFIG_H
 #define BUTTON_CONFIG_H
 
+#include "PINS_CONFIG.h"
+
 #define NUM_BUTTONS 4
 #define DEBOUNCE_DELAY 50      // Debounce time in milliseconds
 #define LONG_PRESS_TIME 1000   // Long press threshold in milliseconds
@@ -21,10 +23,10 @@ struct Button {
 
 // Button pins
 Button buttons[NUM_BUTTONS] = {
-  {32, HIGH, HIGH, 0, 0, false, false}, // Button 1
-  {33, HIGH, HIGH, 0, 0, false, false}, // Button 2
-  {25, HIGH, HIGH, 0, 0, false, false}, // Button 3
-  {26, HIGH, HIGH, 0, 0, false, false}  // Button 4
+  {BUTTON1_PIN, HIGH, HIGH, 0, 0, false, false}, // Button 1
+  {BUTTON2_PIN, HIGH, HIGH, 0, 0, false, false}, // Button 2
+  {BUTTON3_PIN, HIGH, HIGH, 0, 0, false, false}, // Button 3
+  {BUTTON4_PIN, HIGH, HIGH, 0, 0, false, false}  // Button 4
 };
 
 void initButtons() {

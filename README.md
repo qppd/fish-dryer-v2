@@ -54,7 +54,7 @@ Three relay/SSR channels are defined. The naming matches the physical function:
 
 ## Default Pin Assignments (ESP32)
 
-All pins are configurable in the corresponding `*_CONFIG.h` files.
+All pin assignments are centralized in `src/esp/FishDryer/PINS_CONFIG.h`. Each module header (`SSR_CONFIG.h`, `SHT31_CONFIG.h`, `LOADCELL_CONFIG.h`, `BUTTON_CONFIG.h`) reads from that file.
 
 ### Relay Pins
 
@@ -81,6 +81,13 @@ Buttons are active-low because they use `INPUT_PULLUP`.
 |--------|------------------------|-------------:|------|
 | DOUT   | `LOADCELL_DOUT_PIN`    | 34           | Input-only GPIO is acceptable for DOUT |
 | SCK    | `LOADCELL_SCK_PIN`     | 27           | Output GPIO; avoid flash/boot strapping pins |
+
+### I2C Pins (SHT31)
+
+| Signal | Config Symbol | Default GPIO |
+|--------|--------------|-------------:|
+| SDA    | `I2C_SDA_PIN` | 21           |
+| SCL    | `I2C_SCL_PIN` | 22           |
 
 ## Serial Monitor Usage
 

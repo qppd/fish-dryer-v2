@@ -1,6 +1,7 @@
 // FishDryer.ino
 // ESP-based fish dryer controller
 
+#include "PINS_CONFIG.h"
 #include "SSR_CONFIG.h" // SSR1: Heating Element, SSR2: Convection Fan, SSR3: Exhaust Fan
 #include "SHT31_CONFIG.h"
 #include "LOADCELL_CONFIG.h"
@@ -16,7 +17,7 @@ void setup() {
   pinMode(SSR3_PIN, OUTPUT);
   Serial.println("SSR_CONFIG loaded. SSR1_PIN, SSR2_PIN, and SSR3_PIN set as OUTPUT.");
 
-  Wire.begin();
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   initSHT31();
   initLoadCell();
   initButtons();
