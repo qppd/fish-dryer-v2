@@ -312,69 +312,6 @@ The entire system operates on a non-blocking event loop using `millis()` for tim
 
 ---
 
-## 👥 User Interface
-
-### HMI Display (Optional Integration)
-
-The system supports external HMI displays via **Serial UART** or **ESP-NOW** wireless protocol for real-time visualization and control.
-
-#### Display Layout Design
-
-```
-┌─────────────────────────────────────────────┐
-│  🐟 FISH DRYER v2.0          [DRYING] 🟢    │
-├─────────────────────────────────────────────┤
-│                                              │
-│  🌡️  Temperature:  58.2°C / 60.0°C         │
-│  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░  97%                  │
-│                                              │
-│  💧 Humidity:  45.3%                        │
-│                                              │
-│  ⚖️  Weight:  2.45 kg (Start: 8.20 kg)     │
-│  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  70% Water Loss    │
-│                                              │
-│  🔥 Heater:  ON   🌀 Fan:  ON   💨 Exhaust: OFF │
-│                                              │
-│  ⏱️  Runtime:  04:32:18                     │
-│                                              │
-│  ⚡ Power:  MAINS  🔋 Battery: 85%          │
-│                                              │
-├─────────────────────────────────────────────┤
-│  [START]  [STOP]  [SETTINGS]  [LOGS]        │
-└─────────────────────────────────────────────┘
-```
-
-#### Dynamic UI Elements
-
-| Element | Update Frequency | Animation | Purpose |
-|---------|------------------|-----------|---------|
-| **Temperature Progress Bar** | 2s | Smooth fill transition | Visual PID feedback |
-| **Weight Loss Progress** | 5s | Incremental update | Drying progress tracking |
-| **Status Icons** | Real-time | Blink on state change | System status at-a-glance |
-| **Alert Banner** | Event-driven | Slide-in with color | Critical warnings |
-| **Timer Display** | 1s | Rolling digits | Total runtime tracking |
-
-#### HMI Tags & Data Points
-
-For integration with Nextion, TJC, or custom displays:
-
-| Tag Name | Data Type | Format | Example | Update Rate |
-|----------|-----------|--------|---------|-------------|
-| `temp_current` | Float | `XX.X` | `58.2` | 2s |
-| `temp_setpoint` | Float | `XX.X` | `60.0` | On change |
-| `humidity` | Float | `XX.X` | `45.3` | 5s |
-| `weight_current` | Float | `X.XX` | `2.45` | 5s |
-| `weight_initial` | Float | `X.XX` | `8.20` | Once at start |
-| `water_loss_pct` | Integer | `XXX` | `70` | 5s |
-| `pid_output` | Integer | `XXXX` | `3245` | 2s |
-| `heater_state` | Boolean | `0/1` | `1` | On change |
-| `fan_state` | Boolean | `0/1` | `1` | On change |
-| `exhaust_state` | Boolean | `0/1` | `0` | On change |
-| `runtime_seconds` | Integer | `XXXXX` | `16338` | 1s |
-| `power_source` | String | `TEXT` | `MAINS` | On change |
-| `battery_pct` | Integer | `XXX` | `85` | 30s |
-| `alert_message` | String | `TEXT` | `Sensor Error` | On event |
-
 ### Physical Button Control
 
 Local control via 4 tactile buttons mounted on the enclosure:
@@ -621,18 +558,9 @@ flowchart TD
 - Log warning to serial/HMI
 - Operator must manually monitor drying progress
 
-#### Thermal Runaway Protection (Planned)
-
-**Future Enhancement:**
-- Software thermal limit (e.g., 85°C absolute maximum)
-- Hardware thermal fuse on heating element
-- Watchdog timer for ESP32 hang detection
-
 ### Electrical Safety
 
 - **SSR Isolation:** Optocoupler-based SSRs provide galvanic isolation between ESP32 logic and high-voltage loads
-- **Fused Outputs:** Each SSR output should have inline fuses rated for the load
-- **Grounding:** Proper earth grounding for metal enclosures and heating elements
 - **Overcurrent Protection:** Circuit breakers on mains input
 
 ### Operational Safety Features
@@ -880,19 +808,7 @@ void handleShortPress(int buttonIndex) {
 - ⬜ HMI display integration (Nextion/ESP-NOW)
 - ⬜ SD card data logging
 - ⬜ Battery voltage monitoring
-- ⬜ Wi-Fi web interface
-- ⬜ MQTT cloud logging
 - ⬜ Automatic water loss calculation
-- ⬜ Multi-stage drying profiles
-
-### Future Enhancements (v3.0.0)
-
-- ⬜ Multi-chamber support
-- ⬜ Machine learning drying optimization
-- ⬜ Mobile app control (Bluetooth LE)
-- ⬜ Energy usage tracking
-- ⬜ Predictive maintenance alerts
-
 ---
 
 ## 🤝 Contributing
@@ -930,12 +846,6 @@ Use GitHub Issues with the following labels:
 ### License
 
 This project is licensed under the **MIT License**. See the `LICENSE` file for full terms.
-
-**Summary:**
-- ✅ Commercial use allowed
-- ✅ Modification allowed
-- ✅ Distribution allowed
-- ⚠️ Provided "as-is" without warranty
 
 ### Project Information
 
