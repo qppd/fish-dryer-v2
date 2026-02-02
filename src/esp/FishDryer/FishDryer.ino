@@ -12,7 +12,8 @@ void setup() {
 
   pinMode(SSR1_PIN, OUTPUT);
   pinMode(SSR2_PIN, OUTPUT);
-  Serial.println("SSR_CONFIG loaded. SSR1_PIN and SSR2_PIN set as OUTPUT.");
+  pinMode(SSR3_PIN, OUTPUT);
+  Serial.println("SSR_CONFIG loaded. SSR1_PIN, SSR2_PIN, and SSR3_PIN set as OUTPUT.");
 
   Wire.begin();
   initSHT31();
@@ -37,12 +38,18 @@ void loop() {
     } else if (cmd == "SSR2:0") {
       digitalWrite(SSR2_PIN, LOW);
       Serial.println("SSR2_PIN set LOW");
+    } else if (cmd == "SSR3:1") {
+      digitalWrite(SSR3_PIN, HIGH);
+      Serial.println("SSR3_PIN set HIGH");
+    } else if (cmd == "SSR3:0") {
+      digitalWrite(SSR3_PIN, LOW);
+      Serial.println("SSR3_PIN set LOW");
     } else if (cmd == "SHT31:READ") {
       readSHT31();
     } else if (cmd == "LOADCELL:READ") {
       readLoadCell();
     } else {
-      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, SSR2:0, SHT31:READ, or LOADCELL:READ.");
+      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, SSR2:0, SSR3:1, SSR3:0, SHT31:READ, or LOADCELL:READ.");
     }
   }
 }
