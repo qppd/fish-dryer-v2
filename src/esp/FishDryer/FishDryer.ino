@@ -4,6 +4,7 @@
 #include "SSR_CONFIG.h" // SSR1: Heating Element, SSR2: Convection Fan, SSR3: Exhaust Fan
 #include "SHT31_CONFIG.h"
 #include "LOADCELL_CONFIG.h"
+#include "BUTTON_CONFIG.h"
 
 void setup() {
   // Initialize serial communication
@@ -18,9 +19,13 @@ void setup() {
   Wire.begin();
   initSHT31();
   initLoadCell();
+  initButtons();
 }
 
 void loop() {
+  // Update button states (non-blocking)
+  updateButtons();
+  
   // Main control loop
   // Listen for serial commands to control SSR
   if (Serial.available()) {
@@ -48,8 +53,10 @@ void loop() {
       readSHT31();
     } else if (cmd == "LOADCELL:READ") {
       readLoadCell();
+    } else if (cmd == "BUTTONS:READ") {
+      readButtons();
     } else {
-      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, SSR2:0, SSR3:1, SSR3:0, SHT31:READ, or LOADCELL:READ.");
+      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, SSR2:0, SSR3:1, SSR3:0, SHT31:READ, LOADCELL:READ, or BUTTONS:READ.");
     }
   }
 }
