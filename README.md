@@ -428,19 +428,6 @@ The Fish Dryer v2 is designed to operate with flexible power sources for off-gri
 - **Max Charge Current:** 40A (limited by MPPT controller)
 - **Temperature Compensation:** Automatic adjustment for optimal charging
 
-#### Battery Monitoring (Planned Feature)
-
-- ADC input for voltage monitoring
-- Low-voltage cutoff protection
-- Charge state estimation
-- Solar input tracking
-
-**Implementation Notes:**
-- Add voltage divider on GPIO 35/36 (ADC1) for battery voltage
-- Calibrate ADC for accurate voltage readings
-- Set low-voltage threshold (e.g., 11.5V for 12V system)
-
----
 
 ## 📊 Data Logging & Monitoring
 
@@ -484,15 +471,6 @@ The system supports multiple logging backends for data persistence and analysis:
 | Runtime | seconds | 1 | 1s | Total operation time |
 | Power Source | enum | - | Event | SOLAR/BATTERY/MAINS |
 
-### Data Visualization
-
-Logged data can be visualized using:
-- **Serial Plotter:** Real-time Arduino IDE plotting
-- **Python Scripts:** Matplotlib/Pandas for CSV analysis
-- **HMI Charts:** On-screen trend graphs
-- **Cloud Dashboards:** MQTT to ThingSpeak, Grafana, etc.
-
----
 
 ## 🛡️ Safety & Fail-Safes
 
