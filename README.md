@@ -381,22 +381,6 @@ The Fish Dryer v2 is designed to operate with flexible power sources for off-gri
 - 6 hours solar charging (600W panels) = 3.6 kWh generated
 - Net: 0.4 kWh deficit (minimal battery draw)
 
-#### Battery Monitoring (Planned Feature)
-
-- ADC input for voltage monitoring (GPIO 35/36)
-- Current sensing for charge/discharge rates
-- State of charge (SOC) estimation using voltage curves
-- Temperature monitoring for optimal charging
-- Low-voltage cutoff protection (LVD integration)
-- Solar input tracking and efficiency monitoring
-
-**Implementation Notes:**
-- Add voltage divider on GPIO 35/36 (ADC1) for battery voltage
-- Calibrate ADC for accurate voltage readings (LiFePO4 specific curves)
-- Set low-voltage threshold (10.5V for 12V LiFePO4 system)
-- Monitor charge controller status via serial communication
-- Implement battery health tracking over time
-
 #### Solar System Installation Guidelines
 
 **Panel Mounting:**
