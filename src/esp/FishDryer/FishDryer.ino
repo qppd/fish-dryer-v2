@@ -3,6 +3,7 @@
 
 #include "SSR_CONFIG.h"
 #include "SHT31_SENSOR.h"
+#include "LOADCELL_CONFIG.h"
 
 void setup() {
   // Initialize serial communication
@@ -15,6 +16,7 @@ void setup() {
 
   Wire.begin();
   initSHT31();
+  initLoadCell();
 }
 
 void loop() {
@@ -37,8 +39,10 @@ void loop() {
       Serial.println("SSR2_PIN set LOW");
     } else if (cmd == "SHT31:READ") {
       readSHT31();
+    } else if (cmd == "LOADCELL:READ") {
+      readLoadCell();
     } else {
-      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, SSR2:0, or SHT31:READ.");
+      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, SSR2:0, SHT31:READ, or LOADCELL:READ.");
     }
   }
 }
