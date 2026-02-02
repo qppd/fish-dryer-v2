@@ -8,8 +8,9 @@ void setup() {
   Serial.begin(115200);
   // Add hardware initialization here
 
-  pinMode(SSR_PIN, OUTPUT);
-  Serial.println("SSR_CONFIG loaded. SSR_PIN set as OUTPUT.");
+  pinMode(SSR1_PIN, OUTPUT);
+  pinMode(SSR2_PIN, OUTPUT);
+  Serial.println("SSR_CONFIG loaded. SSR1_PIN and SSR2_PIN set as OUTPUT.");
 }
 
 void loop() {
@@ -18,14 +19,20 @@ void loop() {
   if (Serial.available()) {
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
-    if (cmd == "SSR:1") {
-      digitalWrite(SSR_PIN, HIGH);
-      Serial.println("SSR_PIN set HIGH");
-    } else if (cmd == "SSR:0") {
-      digitalWrite(SSR_PIN, LOW);
-      Serial.println("SSR_PIN set LOW");
+    if (cmd == "SSR1:1") {
+      digitalWrite(SSR1_PIN, HIGH);
+      Serial.println("SSR1_PIN set HIGH");
+    } else if (cmd == "SSR1:0") {
+      digitalWrite(SSR1_PIN, LOW);
+      Serial.println("SSR1_PIN set LOW");
+    } else if (cmd == "SSR2:1") {
+      digitalWrite(SSR2_PIN, HIGH);
+      Serial.println("SSR2_PIN set HIGH");
+    } else if (cmd == "SSR2:0") {
+      digitalWrite(SSR2_PIN, LOW);
+      Serial.println("SSR2_PIN set LOW");
     } else {
-      Serial.println("Unknown command. Use SSR:1 or SSR:0.");
+      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, or SSR2:0.");
     }
   }
 }

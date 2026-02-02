@@ -4,6 +4,7 @@
 #ifndef SSR_CONFIG_H
 #define SSR_CONFIG_H
 
-#define SSR_PIN 5 // Example GPIO pin for SSR
+#define SSR1_PIN 5 // Example GPIO pin for SSR1
+#define SSR2_PIN 6 // Example GPIO pin for SSR2
 
 #endif // SSR_CONFIG_H
