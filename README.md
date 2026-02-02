@@ -3,7 +3,7 @@
 **Version:** 2.0.0  
 **Target Platform:** ESP32 (38-pin development board)  
 **License:** MIT  
-**Status:** Production-Ready
+**Status:** Development
 
 ---
 
@@ -941,7 +941,7 @@ This project is licensed under the **MIT License**. See the `LICENSE` file for f
 
 - **Repository:** [github.com/qppd/fish-dryer-v2](https://github.com/qppd/fish-dryer-v2)
 - **Version:** 2.0.0
-- **Status:** Production-Ready
+- **Status:** Development
 - **Maintained by:** QPPD Dev Community
 
 ### Contact & Support
