@@ -17,10 +17,21 @@ void initSHT31() {
   }
 }
 
+// Update CURRENT_TEMPERATURE global for PID use
+extern double CURRENT_TEMPERATURE;
+
+void updateTemperature() {
+  float temp = sht31.readTemperature();
+  if (!isnan(temp)) {
+    CURRENT_TEMPERATURE = temp;
+  }
+}
+
 void readSHT31() {
   float temp = sht31.readTemperature();
   float humidity = sht31.readHumidity();
   if (!isnan(temp) && !isnan(humidity)) {
+    CURRENT_TEMPERATURE = temp; // Update global for PID
     Serial.print("SHT31 Temp: ");
     Serial.print(temp);
     Serial.print(" C, Humidity: ");
