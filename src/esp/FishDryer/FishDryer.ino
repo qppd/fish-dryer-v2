@@ -2,6 +2,7 @@
 // ESP-based fish dryer controller
 
 #include "SSR_CONFIG.h"
+#include "SHT31_SENSOR.h"
 
 void setup() {
   // Initialize serial communication
@@ -11,6 +12,9 @@ void setup() {
   pinMode(SSR1_PIN, OUTPUT);
   pinMode(SSR2_PIN, OUTPUT);
   Serial.println("SSR_CONFIG loaded. SSR1_PIN and SSR2_PIN set as OUTPUT.");
+
+  Wire.begin();
+  initSHT31();
 }
 
 void loop() {
@@ -31,8 +35,10 @@ void loop() {
     } else if (cmd == "SSR2:0") {
       digitalWrite(SSR2_PIN, LOW);
       Serial.println("SSR2_PIN set LOW");
+    } else if (cmd == "SHT31:READ") {
+      readSHT31();
     } else {
-      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, or SSR2:0.");
+      Serial.println("Unknown command. Use SSR1:1, SSR1:0, SSR2:1, SSR2:0, or SHT31:READ.");
     }
   }
 }
