@@ -12,17 +12,22 @@ A project for managing and monitoring a fish dryer system using ESP microcontrol
 - Version-controlled with Git
 
 ## Hardware Modules
-- **SSR**: Control two relays via serial commands
-- **SHT31**: Read temperature and humidity
-- **HX711**: Read load cell values
+- **SSR Relays:**
+	- **SSR1 (GPIO 16):** Heating Element
+	- **SSR2 (GPIO 17):** Convection Fan
+	- **SSR3 (GPIO 18):** Exhaust Fan
+- **SHT31:** Read temperature and humidity
+- **HX711:** Read load cell values
 
 ## Serial Commands
 Send these commands via the serial monitor to test hardware:
 
-- `SSR1:1` — Turn SSR1 ON
-- `SSR1:0` — Turn SSR1 OFF
-- `SSR2:1` — Turn SSR2 ON
-- `SSR2:0` — Turn SSR2 OFF
+- `SSR1:1` — Turn Heating Element ON
+- `SSR1:0` — Turn Heating Element OFF
+- `SSR2:1` — Turn Convection Fan ON
+- `SSR2:0` — Turn Convection Fan OFF
+- `SSR3:1` — Turn Exhaust Fan ON
+- `SSR3:0` — Turn Exhaust Fan OFF
 - `SHT31:READ` — Read temperature and humidity
 - `LOADCELL:READ` — Read load cell value
 

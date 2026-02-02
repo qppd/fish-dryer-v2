@@ -4,8 +4,8 @@
 #ifndef SSR_CONFIG_H
 #define SSR_CONFIG_H
 
-#define SSR1_PIN 16 // Safe GPIO for SSR1 (ESP32)
-#define SSR2_PIN 17 // Safe GPIO for SSR2 (ESP32)
-#define SSR3_PIN 18 // Safe GPIO for SSR3 (ESP32)
+#define SSR1_PIN 16 // Heating Element Relay (ESP32 GPIO 16)
+#define SSR2_PIN 17 // Convection Fan Relay (ESP32 GPIO 17)
+#define SSR3_PIN 18 // Exhaust Fan Relay (ESP32 GPIO 18)
 
 #endif // SSR_CONFIG_H

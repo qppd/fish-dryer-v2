@@ -1,7 +1,7 @@
 // FishDryer.ino
 // ESP-based fish dryer controller
 
-#include "SSR_CONFIG.h"
+#include "SSR_CONFIG.h" // SSR1: Heating Element, SSR2: Convection Fan, SSR3: Exhaust Fan
 #include "SHT31_CONFIG.h"
 #include "LOADCELL_CONFIG.h"
 
