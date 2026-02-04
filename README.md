@@ -194,6 +194,12 @@ graph TB
 - **Enclosure:** Use NEMA-rated enclosure if operating in humid environments
 - **Thermal Management:** Provide adequate ventilation for ESP32 and SSRs during operation
 
+### Wiring Diagram
+
+![Wiring Diagram](wiring/circuit_image.png)
+
+For the interactive wiring diagram, visit: [Cirkit Designer](https://app.cirkitdesigner.com/project/edca0d0e-6361-4e7a-a81a-6921ec4fce70)
+
 ---
 
 ## 💻 Software Features & Logic
