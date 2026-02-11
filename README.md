@@ -200,7 +200,7 @@ graph TB
 
 For the interactive wiring diagram, visit: [Cirkit Designer](https://app.cirkitdesigner.com/project/edca0d0e-6361-4e7a-a81a-6921ec4fce70)
 
-Circuit source file: [Fish Dryer V2.ckt](wiring/Fish Dryer V2.ckt)
+Circuit source file: [Fish Dryer V2.ckt](https://github.com/qppd/fish-dryer-v2/blob/main/wiring/Fish%20Dryer%20V2.ckt)
 
 ---
 
