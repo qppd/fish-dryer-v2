@@ -70,7 +70,7 @@ lv_obj_t* createBootScreen() {
 
     // ---- Title ----
     lv_obj_t* title = lv_label_create(scr);
-    lv_label_set_text(title, "FISH DRYER V2");
+    lv_label_set_text(title, "SolAraw");
     lv_obj_set_style_text_font(title, FONT_XXL, 0);
     lv_obj_set_style_text_color(title, COLOR_TEXT_PRIMARY, 0);
     lv_obj_set_style_text_letter_space(title, 4, 0);

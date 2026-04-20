@@ -168,7 +168,7 @@ void showDryingComplete(float waterLoss, unsigned long elapsedMs) {
 
     // Stats
     lv_obj_t* wlLbl = lv_label_create(box);
-    lv_label_set_text_fmt(wlLbl, "Water Loss: %.0f%%", waterLoss);
+    { char _b[24]; snprintf(_b, sizeof(_b), "Water Loss: %.0f%%", waterLoss); lv_label_set_text(wlLbl, _b); }
     lv_obj_set_style_text_font(wlLbl, FONT_MEDIUM, 0);
     lv_obj_set_style_text_color(wlLbl, COLOR_TEXT_PRIMARY, 0);
 

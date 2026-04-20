@@ -27,7 +27,7 @@ static void tempPlusCb(lv_event_t* e) {
     (void)e;
     tempSetpoint += 1.0f;
     if (tempSetpoint > 100.0f) tempSetpoint = 100.0f;
-    lv_label_set_text_fmt(tempSetLabel, "%.0f \u00B0C", tempSetpoint);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
     sendSetTemperature(tempSetpoint);
 }
 
@@ -35,7 +35,7 @@ static void tempMinusCb(lv_event_t* e) {
     (void)e;
     tempSetpoint -= 1.0f;
     if (tempSetpoint < 30.0f) tempSetpoint = 30.0f;
-    lv_label_set_text_fmt(tempSetLabel, "%.0f \u00B0C", tempSetpoint);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
     sendSetTemperature(tempSetpoint);
 }
 
@@ -44,7 +44,7 @@ static void tempPlus5Cb(lv_event_t* e) {
     (void)e;
     tempSetpoint += 5.0f;
     if (tempSetpoint > 100.0f) tempSetpoint = 100.0f;
-    lv_label_set_text_fmt(tempSetLabel, "%.0f \u00B0C", tempSetpoint);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
     sendSetTemperature(tempSetpoint);
 }
 
@@ -52,7 +52,7 @@ static void tempMinus5Cb(lv_event_t* e) {
     (void)e;
     tempSetpoint -= 5.0f;
     if (tempSetpoint < 30.0f) tempSetpoint = 30.0f;
-    lv_label_set_text_fmt(tempSetLabel, "%.0f \u00B0C", tempSetpoint);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
     sendSetTemperature(tempSetpoint);
 }
 
@@ -199,7 +199,7 @@ lv_obj_t* createControlScreen() {
     lv_obj_set_scrollbar_mode(tempDisplay, LV_SCROLLBAR_MODE_OFF);
 
     tempSetLabel = lv_label_create(tempDisplay);
-    lv_label_set_text_fmt(tempSetLabel, "%.0f \u00B0C", tempSetpoint);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
     lv_obj_set_style_text_font(tempSetLabel, FONT_XL, 0);
     lv_obj_set_style_text_color(tempSetLabel, COLOR_ACCENT, 0);
     lv_obj_center(tempSetLabel);
@@ -212,7 +212,7 @@ lv_obj_t* createControlScreen() {
 
     // Current temperature display
     currentTempLabel = lv_label_create(leftCol);
-    lv_label_set_text_fmt(currentTempLabel, "Current: %.1f \u00B0C", dryerData.temperature);
+    { char _b[24]; snprintf(_b, sizeof(_b), "Current: %.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(currentTempLabel, _b); }
     lv_obj_set_style_text_font(currentTempLabel, FONT_NORMAL, 0);
     lv_obj_set_style_text_color(currentTempLabel, COLOR_TEXT_SECONDARY, 0);
 
@@ -317,7 +317,7 @@ lv_obj_t* createControlScreen() {
 void updateControlScreen() {
     if (!currentTempLabel) return;
 
-    lv_label_set_text_fmt(currentTempLabel, "Current: %.1f \u00B0C", dryerData.temperature);
+    { char _b[24]; snprintf(_b, sizeof(_b), "Current: %.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(currentTempLabel, _b); }
 
     // Sync switch states with actual relay states
     if (dryerData.heaterOn) lv_obj_add_state(heaterSwitch, LV_STATE_CHECKED);

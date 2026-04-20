@@ -1,157 +1,139 @@
 // serial_protocol.cpp
-// Fish Dryer V2 HMI - UART communication implementation
+// Fish Dryer V2 HMI — ESP-Now communication with NodeMCU Bridge
+//
+// Replaces UART transport. All public functions keep the same signatures so
+// callers (control_screen, diagnostics_screen, etc.) need no changes.
 
 #include "serial_protocol.h"
+#include "espnow_protocol.h"
 #include "lvgl_v8_port.h"  // for lvgl_port_lock / lvgl_port_unlock
+#include <WiFi.h>
+#include <esp_now.h>
 
-static String rxBuffer;
-static unsigned long lastStatusRequest = 0;
+// ── NodeMCU peer MAC — UPDATE with MAC printed by NodeMCUBridge on boot ───────
+// How to find: boot NodeMCUBridge, read "[NodeMCU Bridge] MAC: XX:XX:XX:XX:XX:XX"
+// Fill in the 6 bytes below, then re-flash HMIDisplay.
+static uint8_t NODEMCU_PEER_MAC[6] = { 0xE0, 0x98, 0x06, 0x8F, 0x98, 0xB9 };  // NodeMCU Bridge MAC
 
-// Simple JSON value parser - extracts a float value for a given key
-static float jsonFloat(const String& json, const char* key) {
-    String search = String("\"") + key + "\"";
-    int idx = json.indexOf(search);
-    if (idx < 0) return 0.0f;
-    idx = json.indexOf(':', idx);
-    if (idx < 0) return 0.0f;
-    idx++;
-    while (idx < (int)json.length() && json[idx] == ' ') idx++;
-    return json.substring(idx).toFloat();
-}
+// ── Receive buffer (set in ESP-Now callback, consumed in serialProtoUpdate) ───
+static volatile bool        newStatusReceived = false;
+static EspNowStatusPacket   pendingStatus;
 
-// Simple JSON value parser - extracts an int value for a given key
-static int jsonInt(const String& json, const char* key) {
-    String search = String("\"") + key + "\"";
-    int idx = json.indexOf(search);
-    if (idx < 0) return 0;
-    idx = json.indexOf(':', idx);
-    if (idx < 0) return 0;
-    idx++;
-    while (idx < (int)json.length() && json[idx] == ' ') idx++;
-    return json.substring(idx).toInt();
-}
+// ── Connection tracking ───────────────────────────────────────────────────────
+#define STATUS_TIMEOUT_MS  6000   // mark disconnected after 6 s with no packet
 
-// Simple JSON string parser - extracts a string value for a given key
-static String jsonString(const String& json, const char* key) {
-    String search = String("\"") + key + "\":\"";
-    int idx = json.indexOf(search);
-    if (idx < 0) return "";
-    idx += search.length();
-    int end = json.indexOf('"', idx);
-    if (end < 0) return "";
-    return json.substring(idx, end);
-}
-
-// Parse incoming JSON message and update DryerData
-static void parseJsonMessage(const String& json) {
-    // Expected format:
-    // {"temp":58.4,"hum":32,"weight":3.2,"loss":45,"heater":1,"fan":1,
-    //  "exhaust":0,"pid":1,"state":"DRYING","target_temp":60,"target_loss":70,
-    //  "pid_out":2500,"fan_a":0.3,"heater_w":980,"bat_v":12.4,"sht31":1}
-
-    dryerData.temperature = jsonFloat(json, "temp");
-    dryerData.humidity = jsonFloat(json, "hum");
-    dryerData.weight = jsonFloat(json, "weight");
-    dryerData.waterLoss = jsonFloat(json, "loss");
-
-    dryerData.heaterOn = jsonInt(json, "heater") != 0;
-    dryerData.fanOn = jsonInt(json, "fan") != 0;
-    dryerData.exhaustOn = jsonInt(json, "exhaust") != 0;
-    dryerData.pidEnabled = jsonInt(json, "pid") != 0;
-
-    dryerData.targetTemp = jsonFloat(json, "target_temp");
-    dryerData.targetWaterLoss = jsonFloat(json, "target_loss");
-    dryerData.pidOutput = jsonFloat(json, "pid_out");
-
-    // Diagnostics data
-    dryerData.fanCurrent = jsonFloat(json, "fan_a");
-    dryerData.heaterPower = jsonFloat(json, "heater_w");
-    dryerData.batteryVoltage = jsonFloat(json, "bat_v");
-    dryerData.sht31Detected = jsonInt(json, "sht31") != 0;
-
-    // System state
-    String state = jsonString(json, "state");
-    if (state == "DRYING")        dryerData.systemState = STATE_DRYING;
-    else if (state == "COMPLETE") dryerData.systemState = STATE_COMPLETE;
-    else if (state == "ERROR")    dryerData.systemState = STATE_ERROR;
-    else if (state == "PAUSED")   dryerData.systemState = STATE_PAUSED;
-    else                          dryerData.systemState = STATE_IDLE;
-
-    dryerData.lastUpdateMs = millis();
-    dryerData.connected = true;
-}
-
-// Parse legacy text format: "KEY:VALUE"
-static void parseTextMessage(const String& line) {
-    int sep = line.indexOf(':');
-    if (sep < 0) return;
-
-    String key = line.substring(0, sep);
-    String val = line.substring(sep + 1);
-    key.trim();
-    val.trim();
-
-    if (key == "TEMP" || key == "SHT31 Temp") {
-        dryerData.temperature = val.toFloat();
-    } else if (key == "HUM" || key == "Humidity") {
-        dryerData.humidity = val.toFloat();
-    } else if (key == "WEIGHT") {
-        dryerData.weight = val.toFloat();
-    } else if (key == "LOSS") {
-        dryerData.waterLoss = val.toFloat();
+// ────────────────────────────────────────────────────────────────────
+// Internal: map EspNowStatusPacket → DryerData
+// (must be called while holding the LVGL mutex)
+// ────────────────────────────────────────────────────────────────────
+static void applyStatusPacket(const EspNowStatusPacket& pkt) {
+    switch (pkt.state) {
+        case DSTATE_DRYING:   dryerData.systemState = STATE_DRYING;   break;
+        case DSTATE_COMPLETE: dryerData.systemState = STATE_COMPLETE; break;
+        case DSTATE_PAUSED:   dryerData.systemState = STATE_PAUSED;   break;
+        default:              dryerData.systemState = STATE_IDLE;     break;
     }
 
+    dryerData.heaterOn   = (pkt.flags & FLAG_HEATER)  != 0;
+    dryerData.fanOn      = (pkt.flags & FLAG_FAN)     != 0;
+    dryerData.exhaustOn  = (pkt.flags & FLAG_EXHAUST) != 0;
+    dryerData.pidEnabled = (pkt.flags & FLAG_PID)     != 0;
+    dryerData.sht31Detected = (pkt.flags & FLAG_SHT31) != 0;
+
+    dryerData.temperature     = pkt.temperature;
+    dryerData.humidity        = pkt.humidity;
+    dryerData.weight          = pkt.weight;
+    dryerData.waterLoss       = pkt.waterLoss;
+    dryerData.targetTemp      = pkt.setpoint;
+    dryerData.targetWaterLoss = pkt.waterLossTarget;
+    dryerData.pidOutput       = pkt.pidOutput;
+    dryerData.dryingElapsedMs = (unsigned long)pkt.runtimeSeconds * 1000UL;
+
     dryerData.lastUpdateMs = millis();
-    dryerData.connected = true;
+    dryerData.connected    = true;
 }
 
-// Process a complete line from UART
-static void processLine(const String& line) {
-    if (line.length() == 0) return;
+// ────────────────────────────────────────────────────────────────────
+// Internal: send a command packet to NodeMCU Bridge
+// ────────────────────────────────────────────────────────────────────
+static void sendCmd(uint8_t cmdType, float value = 0.0f) {
+    EspNowCmdPacket pkt;
+    pkt.packetType = ESPNOW_PKT_CMD;
+    pkt.cmdType    = cmdType;
+    pkt.value      = value;
+    pkt.checksum   = espnowCmdChecksum(&pkt);
+    esp_now_send(NODEMCU_PEER_MAC, (const uint8_t*)&pkt, sizeof(pkt));
+}
 
-    if (line.charAt(0) == '{') {
-        parseJsonMessage(line);
-    } else {
-        parseTextMessage(line);
+// ── ESP-Now receive callback (runs in Wi-Fi/ISR context — keep it short) ──────
+static void onEspNowReceive(const uint8_t* mac,
+                             const uint8_t* data, int len) {
+    if (len < (int)sizeof(EspNowStatusPacket)) return;
+    const EspNowStatusPacket* pkt = (const EspNowStatusPacket*)data;
+    if (!espnowStatusValid(pkt)) {
+        Serial.println("[ESP-Now] Bad status packet (type/checksum)");
+        return;
+    }
+    if (!newStatusReceived) {
+        memcpy((void*)&pendingStatus, pkt, sizeof(EspNowStatusPacket));
+        newStatusReceived = true;
     }
 }
 
+// ── ESP-Now send callback ─────────────────────────────────────────────────────
+static void onEspNowSent(const uint8_t* mac, esp_now_send_status_t status) {
+    if (status != ESP_NOW_SEND_SUCCESS) {
+        Serial.println("[ESP-Now] Send failed — check NODEMCU_PEER_MAC");
+    }
+}
+
+// ────────────────────────────────────────────────────────────────────
 void serialProtoInit() {
-    DRYER_UART.begin(DRYER_UART_BAUD, SERIAL_8N1, DRYER_UART_RX_PIN, DRYER_UART_TX_PIN);
-    rxBuffer.reserve(512);
-    Serial.println("[HMI] Serial protocol initialized");
+    // Wi-Fi must be in STA mode (no connection) for ESP-Now
+    WiFi.mode(WIFI_STA);
+    WiFi.disconnect();
+
+    // Print own MAC so user can copy it into NodeMCUBridge HMI_PEER_MAC
+    Serial.printf("[HMI] NodeMCU peer MAC (copy to NodeMCUBridge HMI_PEER_MAC): %s\n",
+                  WiFi.macAddress().c_str());
+
+    if (esp_now_init() != ESP_OK) {
+        Serial.println("[ESP-Now] Init FAILED");
+        return;
+    }
+
+    esp_now_register_recv_cb((esp_now_recv_cb_t)onEspNowReceive);
+    esp_now_register_send_cb(onEspNowSent);
+
+    // Register NodeMCU as peer
+    esp_now_peer_info_t peerInfo = {};
+    memcpy(peerInfo.peer_addr, NODEMCU_PEER_MAC, 6);
+    peerInfo.channel = ESPNOW_WIFI_CHANNEL;
+    peerInfo.encrypt = false;
+    if (esp_now_add_peer(&peerInfo) != ESP_OK) {
+        Serial.println("[ESP-Now] Add peer failed");
+    }
+
+    Serial.printf("[HMI] ESP-Now ready. NodeMCU peer: %02X:%02X:%02X:%02X:%02X:%02X\n",
+                  NODEMCU_PEER_MAC[0], NODEMCU_PEER_MAC[1], NODEMCU_PEER_MAC[2],
+                  NODEMCU_PEER_MAC[3], NODEMCU_PEER_MAC[4], NODEMCU_PEER_MAC[5]);
 }
 
 void serialProtoUpdate() {
-    // Build complete lines; only touch dryerData while holding the LVGL mutex
-    // to prevent a data race with the LVGL timer task that reads dryerData.
-    while (DRYER_UART.available()) {
-        char c = DRYER_UART.read();
-        if (c == '\n') {
-            rxBuffer.trim();
-            if (rxBuffer.length() > 0) {
-                if (lvgl_port_lock(-1)) {
-                    processLine(rxBuffer);
-                    lvgl_port_unlock();
-                }
-            }
-            rxBuffer = "";
-        } else if (c != '\r') {
-            if (rxBuffer.length() < 500) {
-                rxBuffer += c;
-            }
+    // Apply any received status packet — acquire LVGL mutex to protect dryerData
+    if (newStatusReceived) {
+        newStatusReceived = false;
+        EspNowStatusPacket pkt;
+        memcpy(&pkt, (const void*)&pendingStatus, sizeof(pkt));
+        if (lvgl_port_lock(-1)) {
+            applyStatusPacket(pkt);
+            lvgl_port_unlock();
         }
     }
 
-    // Periodically request status from dryer
+    // Check connection timeout
     unsigned long now = millis();
-    if (now - lastStatusRequest >= STATUS_REQUEST_MS) {
-        sendStatusRequest();
-        lastStatusRequest = now;
-    }
-
-    // Check connection timeout (5 seconds)
-    if (dryerData.connected && (now - dryerData.lastUpdateMs > 5000)) {
+    if (dryerData.connected && (now - dryerData.lastUpdateMs > STATUS_TIMEOUT_MS)) {
         if (lvgl_port_lock(-1)) {
             dryerData.connected = false;
             lvgl_port_unlock();
@@ -159,42 +141,59 @@ void serialProtoUpdate() {
     }
 }
 
-// Command senders - using existing FishDryer text protocol
+// ────────────────────────────────────────────────────────────────────
+// Command senders
+// ────────────────────────────────────────────────────────────────────
 void sendSetTemperature(float temp) {
-    DRYER_UART.print("PID:SET:");
-    DRYER_UART.println(temp, 1);
+    sendCmd(CMD_SET_TEMPERATURE, temp);
 }
 
 void sendHeaterControl(bool on) {
-    DRYER_UART.println(on ? "SSR1:1" : "SSR1:0");
+    sendCmd(on ? CMD_HEATER_ON : CMD_HEATER_OFF);
 }
 
 void sendFanControl(bool on) {
-    DRYER_UART.println(on ? "SSR2:1" : "SSR2:0");
+    sendCmd(on ? CMD_FAN_ON : CMD_FAN_OFF);
 }
 
 void sendExhaustControl(bool on) {
-    DRYER_UART.println(on ? "SSR3:1" : "SSR3:0");
+    sendCmd(on ? CMD_EXHAUST_ON : CMD_EXHAUST_OFF);
 }
 
 void sendPIDStart() {
-    DRYER_UART.println("PID:START");
+    sendCmd(CMD_PID_START);
 }
 
 void sendPIDStop() {
-    DRYER_UART.println("PID:STOP");
+    sendCmd(CMD_PID_STOP);
 }
 
 void sendStartDrying() {
     dryerData.dryingStartMs = millis();
     dryerData.initialWeight = dryerData.weight;
-    sendPIDStart();
+    sendCmd(CMD_START_DRYING);
 }
 
 void sendStopDrying() {
-    sendPIDStop();
+    sendCmd(CMD_STOP_DRYING);
 }
 
 void sendStatusRequest() {
-    DRYER_UART.println("STATUS");
+    sendCmd(CMD_STATUS_REQUEST);
+}
+
+void sendSetWaterLoss(float pct) {
+    sendCmd(CMD_SET_WATER_LOSS, pct);
+}
+
+void sendTareScale() {
+    sendCmd(CMD_TARE_SCALE);
+}
+
+void sendCalibrateScale(float knownKg) {
+    sendCmd(CMD_CALIBRATE_SCALE, knownKg);
+}
+
+void sendSensorTest() {
+    sendCmd(CMD_SENSOR_TEST);
 }

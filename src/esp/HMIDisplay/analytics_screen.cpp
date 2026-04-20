@@ -189,7 +189,7 @@ void updateAnalyticsScreen() {
     lv_chart_refresh(weightChart);
 
     // Update current value labels
-    lv_label_set_text_fmt(tempCurLabel, "%.1f \u00B0C", dryerData.temperature);
-    lv_label_set_text_fmt(humCurLabel, "%.0f %%RH", dryerData.humidity);
-    lv_label_set_text_fmt(weightCurLabel, "%.2f kg", dryerData.weight);
+    { char _b[20]; snprintf(_b, sizeof(_b), "%.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(tempCurLabel, _b); }
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f %%RH", dryerData.humidity);          lv_label_set_text(humCurLabel, _b); }
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.2f kg", dryerData.weight);               lv_label_set_text(weightCurLabel, _b); }
 }

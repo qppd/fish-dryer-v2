@@ -22,13 +22,164 @@ static lv_obj_t* lastUpdateLabel = NULL;
 static lv_obj_t* uptimeLabel = NULL;
 static lv_obj_t* freeHeapLabel = NULL;
 
+// Calibration modal state
+static float     calibKg          = 0.50f;
+static lv_obj_t* calibModalOverlay = NULL;
+static lv_obj_t* calibWeightLbl    = NULL;
+static lv_obj_t* calibStatusLbl    = NULL;
+
+// ── Calibration modal callbacks ──────────────────────────────────────────────
+
+static void closeCalbCb(lv_event_t* e) {
+    (void)e;
+    if (calibModalOverlay) { lv_obj_del(calibModalOverlay); calibModalOverlay = NULL; }
+    calibWeightLbl = NULL;
+    calibStatusLbl = NULL;
+}
+
+static void tareCalbCb(lv_event_t* e) {
+    (void)e;
+    sendTareScale();
+    if (calibStatusLbl)
+        lv_label_set_text(calibStatusLbl, "Taring... Done. Place weight, then tap CALIBRATE.");
+}
+
+static void calDecCb(lv_event_t* e) {
+    (void)e;
+    if (calibKg > 0.10f) calibKg -= 0.10f;
+    if (calibWeightLbl) {
+        char _b[16]; snprintf(_b, sizeof(_b), "%.2f kg", calibKg);
+        lv_label_set_text(calibWeightLbl, _b);
+    }
+}
+
+static void calIncCb(lv_event_t* e) {
+    (void)e;
+    if (calibKg < 50.0f) calibKg += 0.10f;
+    if (calibWeightLbl) {
+        char _b[16]; snprintf(_b, sizeof(_b), "%.2f kg", calibKg);
+        lv_label_set_text(calibWeightLbl, _b);
+    }
+}
+
+static void calibrateCb(lv_event_t* e) {
+    (void)e;
+    sendCalibrateScale(calibKg);
+    if (calibStatusLbl)
+        lv_label_set_text(calibStatusLbl, "Calibrated! Factor saved to EEPROM on controller.");
+}
+
+static void openCalibrationModal(void) {
+    if (calibModalOverlay) return; // already open
+
+    lv_obj_t* overlay = lv_obj_create(lv_layer_top());
+    lv_obj_set_size(overlay, SCREEN_WIDTH, SCREEN_HEIGHT);
+    lv_obj_set_style_bg_color(overlay, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(overlay, LV_OPA_60, 0);
+    lv_obj_set_style_border_width(overlay, 0, 0);
+    lv_obj_set_style_radius(overlay, 0, 0);
+    lv_obj_set_scrollbar_mode(overlay, LV_SCROLLBAR_MODE_OFF);
+    calibModalOverlay = overlay;
+
+    // Modal box
+    lv_obj_t* box = lv_obj_create(overlay);
+    lv_obj_set_size(box, 440, 440);
+    lv_obj_center(box);
+    lv_obj_set_style_bg_color(box, COLOR_BG_CARD, 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(box, 16, 0);
+    lv_obj_set_style_border_width(box, 2, 0);
+    lv_obj_set_style_border_color(box, COLOR_ACCENT, 0);
+    lv_obj_set_style_pad_all(box, 20, 0);
+    lv_obj_set_scrollbar_mode(box, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_flow(box, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(box, 10, 0);
+    lv_obj_set_style_shadow_color(box, COLOR_ACCENT, 0);
+    lv_obj_set_style_shadow_width(box, 30, 0);
+    lv_obj_set_style_shadow_opa(box, LV_OPA_30, 0);
+
+    // Title
+    lv_obj_t* title = lv_label_create(box);
+    lv_label_set_text(title, LV_SYMBOL_SETTINGS "  SCALE CALIBRATION");
+    lv_obj_set_style_text_font(title, FONT_LARGE, 0);
+    lv_obj_set_style_text_color(title, COLOR_ACCENT, 0);
+
+    // Step 1
+    lv_obj_t* step1 = lv_label_create(box);
+    lv_label_set_text(step1, "Step 1  Empty the scale and tare it.");
+    lv_obj_set_style_text_font(step1, FONT_NORMAL, 0);
+    lv_obj_set_style_text_color(step1, COLOR_TEXT_SECONDARY, 0);
+
+    lv_obj_t* tareBtn = createButton(box, LV_SYMBOL_REFRESH "  TARE SCALE",
+                                     LV_PCT(100), 44, &style_btn_primary);
+    lv_obj_add_event_cb(tareBtn, tareCalbCb, LV_EVENT_CLICKED, NULL);
+
+    // Step 2
+    lv_obj_t* step2 = lv_label_create(box);
+    lv_label_set_text(step2, "Step 2  Set known reference weight:");
+    lv_obj_set_style_text_font(step2, FONT_NORMAL, 0);
+    lv_obj_set_style_text_color(step2, COLOR_TEXT_SECONDARY, 0);
+
+    // Weight +/- row
+    lv_obj_t* wRow = lv_obj_create(box);
+    lv_obj_set_size(wRow, LV_PCT(100), 50);
+    lv_obj_set_style_bg_opa(wRow, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(wRow, 0, 0);
+    lv_obj_set_style_pad_all(wRow, 0, 0);
+    lv_obj_set_scrollbar_mode(wRow, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_flow(wRow, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(wRow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(wRow, 12, 0);
+
+    lv_obj_t* decBtn = createButton(wRow, "-", 50, 44, &style_btn_nav);
+    lv_obj_add_event_cb(decBtn, calDecCb, LV_EVENT_CLICKED, NULL);
+
+    calibWeightLbl = lv_label_create(wRow);
+    lv_label_set_text(calibWeightLbl, "0.50 kg");
+    lv_obj_set_style_text_font(calibWeightLbl, FONT_LARGE, 0);
+    lv_obj_set_style_text_color(calibWeightLbl, COLOR_TEXT_PRIMARY, 0);
+    lv_obj_set_flex_grow(calibWeightLbl, 1);
+    lv_obj_set_style_text_align(calibWeightLbl, LV_TEXT_ALIGN_CENTER, 0);
+
+    lv_obj_t* incBtn = createButton(wRow, "+", 50, 44, &style_btn_nav);
+    lv_obj_add_event_cb(incBtn, calIncCb, LV_EVENT_CLICKED, NULL);
+
+    // Step 3
+    lv_obj_t* step3 = lv_label_create(box);
+    lv_label_set_text(step3, "Step 3  Place weight on scale, then calibrate.");
+    lv_obj_set_style_text_font(step3, FONT_NORMAL, 0);
+    lv_obj_set_style_text_color(step3, COLOR_TEXT_SECONDARY, 0);
+
+    lv_obj_t* calBtn = createButton(box, LV_SYMBOL_OK "  CALIBRATE",
+                                    LV_PCT(100), 44, &style_btn_success);
+    lv_obj_add_event_cb(calBtn, calibrateCb, LV_EVENT_CLICKED, NULL);
+
+    // Status label
+    calibStatusLbl = lv_label_create(box);
+    lv_label_set_text(calibStatusLbl, "Ready.");
+    lv_obj_set_style_text_font(calibStatusLbl, FONT_NORMAL, 0);
+    lv_obj_set_style_text_color(calibStatusLbl, COLOR_TEXT_SECONDARY, 0);
+    lv_obj_set_width(calibStatusLbl, LV_PCT(100));
+    lv_obj_set_style_text_align(calibStatusLbl, LV_TEXT_ALIGN_CENTER, 0);
+
+    // Close button
+    lv_obj_t* closeBtn = createButton(box, LV_SYMBOL_CLOSE "  CLOSE",
+                                      LV_PCT(100), 44, &style_btn_danger);
+    lv_obj_add_event_cb(closeBtn, closeCalbCb, LV_EVENT_CLICKED, NULL);
+}
+
+static void openCalModalCb(lv_event_t* e) {
+    (void)e;
+    openCalibrationModal();
+}
+
 // Run sensor test callback
 static void runTestCb(lv_event_t* e) {
     (void)e;
-    // Send test commands to dryer controller
+    // Send sensor-test command to Nano via NodeMCU Bridge (ESP-Now → UART)
+    sendSensorTest();
     sendStatusRequest();
-    DRYER_UART.println("SHT31:READ");
-    DRYER_UART.println("LOADCELL:READ");
 }
 
 // Helper: create a diagnostic row with status dot
@@ -112,7 +263,7 @@ lv_obj_t* createDiagnosticsScreen() {
     lv_obj_set_style_pad_column(content, WIDGET_SPACING, 0);
 
     // ============ Left column: Sensor Status ============
-    lv_obj_t* leftCard = createCard(content, 370, 400);
+    lv_obj_t* leftCard = createCard(content, 370, 430);
     lv_obj_set_flex_flow(leftCard, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(leftCard, 6, 0);
 
@@ -124,6 +275,11 @@ lv_obj_t* createDiagnosticsScreen() {
     // Sensor rows
     createDiagRow(leftCard, "Temperature Sensor", LV_SYMBOL_CHARGE, &tempSensorDot, &tempSensorText);
     createDiagRow(leftCard, "Load Cell", LV_SYMBOL_DOWNLOAD, &loadCellDot, &loadCellText);
+
+    // Calibrate scale button (opens step-by-step calibration modal)
+    lv_obj_t* calScaleBtn = createButton(leftCard, LV_SYMBOL_SETTINGS "  CALIBRATE SCALE",
+                                          LV_PCT(100), 44, &style_btn_nav);
+    lv_obj_add_event_cb(calScaleBtn, openCalModalCb, LV_EVENT_CLICKED, NULL);
 
     // Separator
     lv_obj_t* sep1 = lv_obj_create(leftCard);
@@ -158,7 +314,7 @@ lv_obj_t* createDiagnosticsScreen() {
     i2cLabel = createInfoRow(leftCard, "SHT31 Sensor", "not detected");
 
     // ============ Right column: System Info ============
-    lv_obj_t* rightCard = createCard(content, 370, 400);
+    lv_obj_t* rightCard = createCard(content, 370, 430);
     lv_obj_set_flex_flow(rightCard, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_style_pad_row(rightCard, 6, 0);
 
@@ -242,9 +398,9 @@ void updateDiagnosticsScreen() {
     lv_label_set_text(loadCellText, sensorStatusText(dryerData.loadCellStatus));
 
     // Power readings
-    lv_label_set_text_fmt(fanCurrentLabel, "%.2f A", dryerData.fanCurrent);
-    lv_label_set_text_fmt(heaterPowerLabel, "%.0f W", dryerData.heaterPower);
-    lv_label_set_text_fmt(batteryLabel, "%.1f V", dryerData.batteryVoltage);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.2f A", dryerData.fanCurrent);     lv_label_set_text(fanCurrentLabel, _b); }
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f W", dryerData.heaterPower);     lv_label_set_text(heaterPowerLabel, _b); }
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.1f V", dryerData.batteryVoltage);  lv_label_set_text(batteryLabel, _b); }
 
     // I2C
     lv_label_set_text(i2cLabel, dryerData.sht31Detected ? "detected" : "not detected");

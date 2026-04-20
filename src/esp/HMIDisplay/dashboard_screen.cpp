@@ -9,6 +9,12 @@
 #include "serial_protocol.h"
 #include "alert_popup.h"
 
+// Estimated Time of Completion target humidity (% RH considered "dried")
+#define ETA_TARGET_HUMIDITY_PCT  35.0f
+// Minimum elapsed minutes and humidity drop before ETA is meaningful
+#define ETA_MIN_ELAPSED_MINS     3.0f
+#define ETA_MIN_HUMIDITY_DROP    2.0f
+
 // Widget references for updates
 static lv_obj_t* tempMeter = NULL;
 static lv_meter_indicator_t* tempNeedle = NULL;
@@ -24,6 +30,12 @@ static lv_obj_t* exhaustIndicator = NULL;
 static lv_obj_t* stateLabel = NULL;
 static lv_obj_t* connIcon = NULL;
 static lv_obj_t* elapsedLabel = NULL;
+static lv_obj_t* etaLabel = NULL;
+
+// ETA tracking state
+static float        eta_startHumidity = 0.0f;
+static unsigned long eta_startMs       = 0;
+static DryerState   eta_lastState      = STATE_IDLE;
 
 // Navigation callbacks
 static void navControlCb(lv_event_t* e) { (void)e; loadScreen(SCREEN_CONTROL); }
@@ -137,7 +149,7 @@ lv_obj_t* createDashboardScreen() {
     lv_obj_set_scrollbar_mode(scr, LV_SCROLLBAR_MODE_OFF);
 
     // ==================== TOP BAR ====================
-    lv_obj_t* topBar = createTopBar(scr, "Fish Dryer V2", false);
+    lv_obj_t* topBar = createTopBar(scr, "SolAraw", false);
 
     // Connection status in top bar
     connIcon = lv_label_create(topBar);
@@ -268,6 +280,13 @@ lv_obj_t* createDashboardScreen() {
     lv_obj_set_style_text_color(elapsedLabel, COLOR_TEXT_SECONDARY, 0);
     lv_obj_align(elapsedLabel, LV_ALIGN_TOP_LEFT, 0, 218);
 
+    // Estimated time of completion (ETA) label — right side of the same row
+    etaLabel = lv_label_create(rightCol);
+    lv_label_set_text(etaLabel, "");
+    lv_obj_set_style_text_font(etaLabel, FONT_SMALL, 0);
+    lv_obj_set_style_text_color(etaLabel, COLOR_TEXT_SECONDARY, 0);
+    lv_obj_align(etaLabel, LV_ALIGN_TOP_RIGHT, 0, 218);
+
     // Navigation buttons row at bottom of right panel
     lv_obj_t* navRow = lv_obj_create(rightCol);
     lv_obj_set_size(navRow, 440, 80);
@@ -339,17 +358,17 @@ void updateDashboardScreen() {
     lv_meter_set_indicator_value(tempMeter, tempNeedle, tempVal);
 
     // Temperature value
-    lv_label_set_text_fmt(tempValueLabel, "%.1f \u00B0C", dryerData.temperature);
-    lv_label_set_text_fmt(tempTargetLabel, "Target: %.0f \u00B0C", dryerData.targetTemp);
+    { char _b[20]; snprintf(_b, sizeof(_b), "%.1f \xC2\xB0C", dryerData.temperature);       lv_label_set_text(tempValueLabel, _b); }
+    { char _b[28]; snprintf(_b, sizeof(_b), "Target: %.0f \xC2\xB0C", dryerData.targetTemp); lv_label_set_text(tempTargetLabel, _b); }
 
     // Humidity
-    lv_label_set_text_fmt(humidityValueLabel, "%.0f%%", dryerData.humidity);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.humidity); lv_label_set_text(humidityValueLabel, _b); }
 
     // Weight
-    lv_label_set_text_fmt(weightValueLabel, "%.1fkg", dryerData.weight);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.1f kg", dryerData.weight); lv_label_set_text(weightValueLabel, _b); }
 
     // Water loss
-    lv_label_set_text_fmt(waterLossLabel, "%.0f%%", dryerData.waterLoss);
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.waterLoss); lv_label_set_text(waterLossLabel, _b); }
     int wlVal = (int)dryerData.waterLoss;
     if (wlVal < 0) wlVal = 0;
     if (wlVal > 100) wlVal = 100;
@@ -391,5 +410,39 @@ void updateDashboardScreen() {
         lv_label_set_text_fmt(elapsedLabel, "Elapsed: %luh %02lum", hrs, mins % 60);
     } else {
         lv_label_set_text(elapsedLabel, "");
+    }
+
+    // ---- Estimated Time of Completion (ETA) based on humidity decrease ----
+    // Capture start-of-drying sample whenever a new drying session begins
+    if (dryerData.systemState == STATE_DRYING && eta_lastState != STATE_DRYING) {
+        eta_startHumidity = dryerData.humidity;
+        eta_startMs       = millis();
+    }
+    // Clear tracking when drying stops
+    if (dryerData.systemState != STATE_DRYING) {
+        eta_startMs = 0;
+    }
+    eta_lastState = dryerData.systemState;
+
+    if (dryerData.systemState == STATE_DRYING && eta_startMs > 0 && etaLabel) {
+        float elapsedMins  = (millis() - eta_startMs) / 60000.0f;
+        float humidityDrop = eta_startHumidity - dryerData.humidity;
+
+        if (elapsedMins >= ETA_MIN_ELAPSED_MINS && humidityDrop >= ETA_MIN_HUMIDITY_DROP) {
+            float ratePerMin = humidityDrop / elapsedMins;          // %RH per minute
+            float remaining  = dryerData.humidity - ETA_TARGET_HUMIDITY_PCT;
+
+            if (remaining <= 0.0f) {
+                lv_label_set_text(etaLabel, "ETA: Done");
+            } else {
+                unsigned long etaMins = (unsigned long)(remaining / ratePerMin);
+                unsigned long etaHrs  = etaMins / 60;
+                lv_label_set_text_fmt(etaLabel, "ETA: %lu:%02lu", etaHrs, etaMins % 60);
+            }
+        } else {
+            lv_label_set_text(etaLabel, "ETA: --:--");
+        }
+    } else {
+        if (etaLabel) lv_label_set_text(etaLabel, "");
     }
 }
