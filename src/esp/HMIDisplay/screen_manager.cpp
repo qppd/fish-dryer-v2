@@ -1,6 +1,7 @@
 // screen_manager.cpp
 // Fish Dryer V2 HMI - Screen navigation implementation
 
+#include <Arduino.h>
 #include "screen_manager.h"
 #include "ui_theme.h"
 #include "boot_screen.h"
