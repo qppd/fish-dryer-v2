@@ -45,6 +45,18 @@
 - Agricultural product drying
 - Research and development testbeds
 
+### 3D Model Gallery
+
+Physical design renderings of the Fish Dryer v2 enclosure:
+
+| View | Description |
+|------|-------------|
+| ![Front View](model/Fish_Dryer_Front.png) | Front panel with HMI touchscreen display |
+| ![Full Assembly 1](model/Fish_Dryer_Full_1.png) | Complete assembly exterior view |
+| ![Full Assembly 2](model/Fish_Dryer_Full_2.png) | Angled assembly view with solar panels |
+| ![Open View 1](model/Fish_Dryer_Open.png) | Interior showing drying racks and heating element |
+| ![Open View 2](model/Fish_Dryer_Open_2.png) | Detail view of convection and exhaust flow |
+
 ---
 
 ## 🏗️ System Architecture
@@ -248,7 +260,8 @@ The HX711 load cell continuously monitors product weight to calculate water cont
 - Initial weight captured at start
 - Continuous weight tracking during operation
 - Water content percentage = `(Initial - Current) / Initial × 100`
-- Auto-stop threshold configurable (e.g., 70% water loss)
+- Auto-stop threshold configurable via HMI slider (10-95%)
+- Visual water loss progress bar on HMI dashboard
 
 ```mermaid
 flowchart TD
@@ -264,7 +277,24 @@ flowchart TD
     AutoStop --> End
 ```
 
-#### 3. Button Interaction System
+#### 3. Drying Presets & HMI Interface
+
+The HMI touchscreen provides an intuitive interface with pre-configured drying profiles for common dried seafood:
+
+**Available Presets:**
+| Preset | Temperature | Description |
+|--------|-------------|-------------|
+| **Tuyo** | 60°C | Salted dried fish (herring/bangus) |
+| **Danggit** | 60°C | Rabbitfish fillets |
+| **Pusit** | 50°C | Dried squid (lower temp) |
+| **Others** | 30-100°C | Custom temperature selection with +/- 1°C or 5°C steps |
+
+**HMI Screens:**
+- **Dashboard:** Temperature gauge (0-120°C with color zones), humidity/weight cards, water loss progress bar, relay status indicators, elapsed time, EDT (Estimated Drying Time based on humidity drop rate)
+- **Control Panel:** Preset selection buttons, manual temperature controls, relay toggle switches, auto/manual mode selection, target water loss slider
+- **Diagnostics:** Sensor health status (SHT31, HX711), power readings, controller link status, system uptime, scale calibration wizard
+
+#### 4. Button Interaction System
 
 Four tactile buttons provide local user control with debouncing and press-duration detection.
 
@@ -773,12 +803,24 @@ void handleShortPress(int buttonIndex) {
 - ✅ Button input system
 - ✅ Serial command interface
 
+### Current Features (v2.0.x)
+
+- ✅ Drying Presets (Tuyo, Danggit, Pusit with optimized temperature profiles)
+- ✅ HMI Touchscreen Interface (LVGL-based with multiple screens)
+  - Dashboard with real-time temperature gauge
+  - Control panel with preset/manual mode selection
+  - Diagnostics and sensor status monitoring
+  - Scale calibration wizard
+- ✅ Estimated Drying Time (EDT) calculation based on humidity drop rate
+- ✅ Water loss progress tracking with visual progress bar
+- ✅ WiFi/ESP-NOW connectivity to controller
+
 ### Planned Features (v2.1.0)
 
-- ⬜ HMI display integration (Nextion/ESP-NOW)
 - ⬜ SD card data logging
 - ⬜ Battery voltage monitoring
-- ⬜ Automatic water loss calculation
+- ⬜ Cloud connectivity for remote monitoring
+- ⬜ Mobile app integration
 ---
 
 ## 🤝 Contributing
