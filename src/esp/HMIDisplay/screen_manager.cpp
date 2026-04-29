@@ -9,14 +9,11 @@
 #include "control_screen.h"
 #include "analytics_screen.h"
 #include "diagnostics_screen.h"
+#include "lvgl_v8_port.h"
 
 static ScreenId currentScreen = SCREEN_BOOT;
 static ScreenId previousScreen = SCREEN_DASHBOARD;
 static lv_obj_t* screens[SCREEN_COUNT] = { NULL };
-
-// LVGL port functions for thread safety (defined in lvgl_v8_port.cpp)
-extern void lvgl_port_lock(int timeout);
-extern void lvgl_port_unlock();
 
 // Screen creation functions
 static lv_obj_t* createScreen(ScreenId id) {
