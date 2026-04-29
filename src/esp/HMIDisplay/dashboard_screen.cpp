@@ -10,10 +10,10 @@
 #include "alert_popup.h"
 
 // Estimated Time of Completion target humidity (% RH considered "dried")
-#define ETA_TARGET_HUMIDITY_PCT  35.0f
-// Minimum elapsed minutes and humidity drop before ETA is meaningful
-#define ETA_MIN_ELAPSED_MINS     3.0f
-#define ETA_MIN_HUMIDITY_DROP    2.0f
+#define EDT_TARGET_HUMIDITY_PCT  35.0f
+// Minimum elapsed minutes and humidity drop before EDT is meaningful
+#define EDT_MIN_ELAPSED_MINS     3.0f
+#define EDT_MIN_HUMIDITY_DROP    2.0f
 
 // Widget references for updates
 static lv_obj_t* tempMeter = NULL;
@@ -30,12 +30,14 @@ static lv_obj_t* exhaustIndicator = NULL;
 static lv_obj_t* stateLabel = NULL;
 static lv_obj_t* connIcon = NULL;
 static lv_obj_t* elapsedLabel = NULL;
-static lv_obj_t* etaLabel = NULL;
+static lv_obj_t* edtLabel = NULL;
+static lv_obj_t* startBtn = NULL;
+static lv_obj_t* stopBtn = NULL;
 
-// ETA tracking state
-static float        eta_startHumidity = 0.0f;
-static unsigned long eta_startMs       = 0;
-static DryerState   eta_lastState      = STATE_IDLE;
+// EDT tracking state
+static float        edt_startHumidity = 0.0f;
+static unsigned long edt_startMs       = 0;
+static DryerState   edt_lastState      = STATE_IDLE;
 
 // Navigation callbacks
 static void navControlCb(lv_event_t* e) { (void)e; loadScreen(SCREEN_CONTROL); }
@@ -280,12 +282,12 @@ lv_obj_t* createDashboardScreen() {
     lv_obj_set_style_text_color(elapsedLabel, COLOR_TEXT_SECONDARY, 0);
     lv_obj_align(elapsedLabel, LV_ALIGN_TOP_LEFT, 0, 218);
 
-    // Estimated time of completion (ETA) label — right side of the same row
-    etaLabel = lv_label_create(rightCol);
-    lv_label_set_text(etaLabel, "");
-    lv_obj_set_style_text_font(etaLabel, FONT_SMALL, 0);
-    lv_obj_set_style_text_color(etaLabel, COLOR_TEXT_SECONDARY, 0);
-    lv_obj_align(etaLabel, LV_ALIGN_TOP_RIGHT, 0, 218);
+    // Estimated time of completion (EDT) label — right side of the same row
+    edtLabel = lv_label_create(rightCol);
+    lv_label_set_text(edtLabel, "");
+    lv_obj_set_style_text_font(edtLabel, FONT_SMALL, 0);
+    lv_obj_set_style_text_color(edtLabel, COLOR_TEXT_SECONDARY, 0);
+    lv_obj_align(edtLabel, LV_ALIGN_TOP_RIGHT, 0, 218);
 
     // Navigation buttons row at bottom of right panel
     lv_obj_t* navRow = lv_obj_create(rightCol);
@@ -323,10 +325,10 @@ lv_obj_t* createDashboardScreen() {
     lv_obj_set_flex_align(bottomBar, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(bottomBar, 20, 0);
 
-    lv_obj_t* startBtn = createButton(bottomBar, LV_SYMBOL_PLAY " START", 160, 44, &style_btn_success);
+    startBtn = createButton(bottomBar, LV_SYMBOL_PLAY " START", 160, 44, &style_btn_success);
     lv_obj_add_event_cb(startBtn, startBtnCb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t* stopBtn = createButton(bottomBar, LV_SYMBOL_STOP " STOP", 160, 44, &style_btn_danger);
+    stopBtn = createButton(bottomBar, LV_SYMBOL_STOP " STOP", 160, 44, &style_btn_danger);
     lv_obj_add_event_cb(stopBtn, stopBtnCb, LV_EVENT_CLICKED, NULL);
 
     lv_obj_t* setTempBtn = createButton(bottomBar, LV_SYMBOL_SETTINGS " SET TEMP", 180, 44, &style_btn_primary);
@@ -349,36 +351,50 @@ static void updateIndicator(lv_obj_t* dot, bool isOn) {
 }
 
 void updateDashboardScreen() {
-    if (!tempMeter || !tempNeedle) return;
+    if (!tempMeter || !tempNeedle || !lv_obj_is_valid(tempMeter)) return;
 
     // Temperature gauge
     int tempVal = (int)dryerData.temperature;
     if (tempVal < GAUGE_TEMP_MIN) tempVal = GAUGE_TEMP_MIN;
     if (tempVal > GAUGE_TEMP_MAX) tempVal = GAUGE_TEMP_MAX;
-    lv_meter_set_indicator_value(tempMeter, tempNeedle, tempVal);
+    if (lv_obj_is_valid(tempMeter)) {
+        lv_meter_set_indicator_value(tempMeter, tempNeedle, tempVal);
+    }
 
     // Temperature value
-    { char _b[20]; snprintf(_b, sizeof(_b), "%.1f \xC2\xB0C", dryerData.temperature);       lv_label_set_text(tempValueLabel, _b); }
-    { char _b[28]; snprintf(_b, sizeof(_b), "Target: %.0f \xC2\xB0C", dryerData.targetTemp); lv_label_set_text(tempTargetLabel, _b); }
+    if (lv_obj_is_valid(tempValueLabel)) {
+        { char _b[20]; snprintf(_b, sizeof(_b), "%.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(tempValueLabel, _b); }
+    }
+    if (lv_obj_is_valid(tempTargetLabel)) {
+        { char _b[28]; snprintf(_b, sizeof(_b), "Target: %.0f \xC2\xB0C", dryerData.targetTemp); lv_label_set_text(tempTargetLabel, _b); }
+    }
 
     // Humidity
-    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.humidity); lv_label_set_text(humidityValueLabel, _b); }
+    if (lv_obj_is_valid(humidityValueLabel)) {
+        { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.humidity); lv_label_set_text(humidityValueLabel, _b); }
+    }
 
     // Weight
-    { char _b[12]; snprintf(_b, sizeof(_b), "%.1f kg", dryerData.weight); lv_label_set_text(weightValueLabel, _b); }
+    if (lv_obj_is_valid(weightValueLabel)) {
+        { char _b[12]; snprintf(_b, sizeof(_b), "%.1f kg", dryerData.weight); lv_label_set_text(weightValueLabel, _b); }
+    }
 
     // Water loss
-    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.waterLoss); lv_label_set_text(waterLossLabel, _b); }
-    int wlVal = (int)dryerData.waterLoss;
-    if (wlVal < 0) wlVal = 0;
-    if (wlVal > 100) wlVal = 100;
-    lv_bar_set_value(waterLossBar, wlVal, LV_ANIM_ON);
+    if (lv_obj_is_valid(waterLossLabel)) {
+        { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.waterLoss); lv_label_set_text(waterLossLabel, _b); }
+    }
+    if (lv_obj_is_valid(waterLossBar)) {
+        int wlVal = (int)dryerData.waterLoss;
+        if (wlVal < 0) wlVal = 0;
+        if (wlVal > 100) wlVal = 100;
+        lv_bar_set_value(waterLossBar, wlVal, LV_ANIM_ON);
 
-    // Color the water loss bar based on progress
-    if (dryerData.waterLoss >= dryerData.targetWaterLoss) {
-        lv_obj_set_style_bg_color(waterLossBar, COLOR_SUCCESS, LV_PART_INDICATOR);
-    } else {
-        lv_obj_set_style_bg_color(waterLossBar, COLOR_IDLE, LV_PART_INDICATOR);
+        // Color the water loss bar based on progress
+        if (dryerData.waterLoss >= dryerData.targetWaterLoss) {
+            lv_obj_set_style_bg_color(waterLossBar, COLOR_SUCCESS, LV_PART_INDICATOR);
+        } else {
+            lv_obj_set_style_bg_color(waterLossBar, COLOR_IDLE, LV_PART_INDICATOR);
+        }
     }
 
     // Relay indicators
@@ -387,62 +403,98 @@ void updateDashboardScreen() {
     updateIndicator(exhaustIndicator, dryerData.exhaustOn);
 
     // System state
-    const char* stateText;
-    switch (dryerData.systemState) {
-        case STATE_DRYING:   stateText = "DRYING"; break;
-        case STATE_COMPLETE: stateText = "COMPLETE"; break;
-        case STATE_ERROR:    stateText = "ERROR"; break;
-        case STATE_PAUSED:   stateText = "PAUSED"; break;
-        default:             stateText = "IDLE"; break;
+    if (lv_obj_is_valid(stateLabel)) {
+        const char* stateText;
+        switch (dryerData.systemState) {
+            case STATE_DRYING:   stateText = "DRYING"; break;
+            case STATE_COMPLETE: stateText = "COMPLETE"; break;
+            case STATE_ERROR:    stateText = "ERROR"; break;
+            case STATE_PAUSED:   stateText = "PAUSED"; break;
+            default:             stateText = "IDLE"; break;
+        }
+        lv_label_set_text(stateLabel, stateText);
+        lv_obj_set_style_text_color(stateLabel, getStateColor(dryerData.systemState), 0);
     }
-    lv_label_set_text(stateLabel, stateText);
-    lv_obj_set_style_text_color(stateLabel, getStateColor(dryerData.systemState), 0);
+
+    // ---- START/STOP Button Visibility based on System State ----
+    if (lv_obj_is_valid(startBtn) && lv_obj_is_valid(stopBtn)) {
+        switch (dryerData.systemState) {
+            case STATE_IDLE:
+                lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_DRYING:
+                lv_obj_add_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_COMPLETE:
+                lv_obj_add_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_ERROR:
+                lv_obj_add_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_PAUSED:
+                lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            default:
+                lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+        }
+    }
 
     // Connection indicator
-    lv_obj_set_style_text_color(connIcon, dryerData.connected ? COLOR_SUCCESS : COLOR_DANGER, 0);
-
-    // Elapsed time
-    if (dryerData.systemState == STATE_DRYING && dryerData.dryingStartMs > 0) {
-        unsigned long elapsed = millis() - dryerData.dryingStartMs;
-        unsigned long secs = elapsed / 1000;
-        unsigned long mins = secs / 60;
-        unsigned long hrs = mins / 60;
-        lv_label_set_text_fmt(elapsedLabel, "Elapsed: %luh %02lum", hrs, mins % 60);
-    } else {
-        lv_label_set_text(elapsedLabel, "");
+    if (lv_obj_is_valid(connIcon)) {
+        lv_obj_set_style_text_color(connIcon, dryerData.connected ? COLOR_SUCCESS : COLOR_DANGER, 0);
     }
 
-    // ---- Estimated Time of Completion (ETA) based on humidity decrease ----
+    // Elapsed time
+    if (lv_obj_is_valid(elapsedLabel)) {
+        if (dryerData.systemState == STATE_DRYING && dryerData.dryingStartMs > 0) {
+            unsigned long elapsed = millis() - dryerData.dryingStartMs;
+            unsigned long secs = elapsed / 1000;
+            unsigned long mins = secs / 60;
+            unsigned long hrs = mins / 60;
+            lv_label_set_text_fmt(elapsedLabel, "Elapsed: %luh %02lum", hrs, mins % 60);
+        } else {
+            lv_label_set_text(elapsedLabel, "");
+        }
+    }
+
+    // ---- Estimated Drying Time (EDT) based on humidity decrease ----
     // Capture start-of-drying sample whenever a new drying session begins
-    if (dryerData.systemState == STATE_DRYING && eta_lastState != STATE_DRYING) {
-        eta_startHumidity = dryerData.humidity;
-        eta_startMs       = millis();
+    if (dryerData.systemState == STATE_DRYING && edt_lastState != STATE_DRYING) {
+        edt_startHumidity = dryerData.humidity;
+        edt_startMs       = millis();
     }
     // Clear tracking when drying stops
     if (dryerData.systemState != STATE_DRYING) {
-        eta_startMs = 0;
+        edt_startMs = 0;
     }
-    eta_lastState = dryerData.systemState;
+    edt_lastState = dryerData.systemState;
 
-    if (dryerData.systemState == STATE_DRYING && eta_startMs > 0 && etaLabel) {
-        float elapsedMins  = (millis() - eta_startMs) / 60000.0f;
-        float humidityDrop = eta_startHumidity - dryerData.humidity;
+    if (lv_obj_is_valid(edtLabel) && dryerData.systemState == STATE_DRYING && edt_startMs > 0) {
+        float elapsedMins  = (millis() - edt_startMs) / 60000.0f;
+        float humidityDrop = edt_startHumidity - dryerData.humidity;
 
-        if (elapsedMins >= ETA_MIN_ELAPSED_MINS && humidityDrop >= ETA_MIN_HUMIDITY_DROP) {
+        if (elapsedMins >= EDT_MIN_ELAPSED_MINS && humidityDrop >= EDT_MIN_HUMIDITY_DROP) {
             float ratePerMin = humidityDrop / elapsedMins;          // %RH per minute
-            float remaining  = dryerData.humidity - ETA_TARGET_HUMIDITY_PCT;
+            float remaining  = dryerData.humidity - EDT_TARGET_HUMIDITY_PCT;
 
             if (remaining <= 0.0f) {
-                lv_label_set_text(etaLabel, "ETA: Done");
+                lv_label_set_text(edtLabel, "EDT: Done");
             } else {
-                unsigned long etaMins = (unsigned long)(remaining / ratePerMin);
-                unsigned long etaHrs  = etaMins / 60;
-                lv_label_set_text_fmt(etaLabel, "ETA: %lu:%02lu", etaHrs, etaMins % 60);
+                unsigned long edtMins = (unsigned long)(remaining / ratePerMin);
+                unsigned long edtHrs  = edtMins / 60;
+                lv_label_set_text_fmt(edtLabel, "EDT: %lu:%02lu", edtHrs, edtMins % 60);
             }
         } else {
-            lv_label_set_text(etaLabel, "ETA: --:--");
+            lv_label_set_text(edtLabel, "EDT: --:--");
         }
-    } else {
-        if (etaLabel) lv_label_set_text(etaLabel, "");
+    } else if (lv_obj_is_valid(edtLabel)) {
+        lv_label_set_text(edtLabel, "");
     }
 }

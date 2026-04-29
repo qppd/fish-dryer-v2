@@ -391,29 +391,43 @@ void updateDiagnosticsScreen() {
     if (!tempSensorDot) return;
 
     // Sensor statuses
-    updateSensorDot(tempSensorDot, dryerData.tempSensorStatus);
-    lv_label_set_text(tempSensorText, sensorStatusText(dryerData.tempSensorStatus));
+    if (lv_obj_is_valid(tempSensorDot) && lv_obj_is_valid(tempSensorText)) {
+        updateSensorDot(tempSensorDot, dryerData.tempSensorStatus);
+        lv_label_set_text(tempSensorText, sensorStatusText(dryerData.tempSensorStatus));
+    }
 
-    updateSensorDot(loadCellDot, dryerData.loadCellStatus);
-    lv_label_set_text(loadCellText, sensorStatusText(dryerData.loadCellStatus));
+    if (lv_obj_is_valid(loadCellDot) && lv_obj_is_valid(loadCellText)) {
+        updateSensorDot(loadCellDot, dryerData.loadCellStatus);
+        lv_label_set_text(loadCellText, sensorStatusText(dryerData.loadCellStatus));
+    }
 
     // Power readings
-    { char _b[12]; snprintf(_b, sizeof(_b), "%.2f A", dryerData.fanCurrent);     lv_label_set_text(fanCurrentLabel, _b); }
-    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f W", dryerData.heaterPower);     lv_label_set_text(heaterPowerLabel, _b); }
-    { char _b[12]; snprintf(_b, sizeof(_b), "%.1f V", dryerData.batteryVoltage);  lv_label_set_text(batteryLabel, _b); }
+    if (lv_obj_is_valid(fanCurrentLabel)) {
+        { char _b[12]; snprintf(_b, sizeof(_b), "%.2f A", dryerData.fanCurrent); lv_label_set_text(fanCurrentLabel, _b); }
+    }
+    if (lv_obj_is_valid(heaterPowerLabel)) {
+        { char _b[12]; snprintf(_b, sizeof(_b), "%.0f W", dryerData.heaterPower); lv_label_set_text(heaterPowerLabel, _b); }
+    }
+    if (lv_obj_is_valid(batteryLabel)) {
+        { char _b[12]; snprintf(_b, sizeof(_b), "%.1f V", dryerData.batteryVoltage); lv_label_set_text(batteryLabel, _b); }
+    }
 
     // I2C
-    lv_label_set_text(i2cLabel, dryerData.sht31Detected ? "detected" : "not detected");
-    lv_obj_set_style_text_color(i2cLabel,
-        dryerData.sht31Detected ? COLOR_SUCCESS : COLOR_DANGER, 0);
+    if (lv_obj_is_valid(i2cLabel)) {
+        lv_label_set_text(i2cLabel, dryerData.sht31Detected ? "detected" : "not detected");
+        lv_obj_set_style_text_color(i2cLabel,
+            dryerData.sht31Detected ? COLOR_SUCCESS : COLOR_DANGER, 0);
+    }
 
     // Connection status
-    lv_label_set_text(connStatusLabel, dryerData.connected ? "Connected" : "Disconnected");
-    lv_obj_set_style_text_color(connStatusLabel,
-        dryerData.connected ? COLOR_SUCCESS : COLOR_DANGER, 0);
+    if (lv_obj_is_valid(connStatusLabel)) {
+        lv_label_set_text(connStatusLabel, dryerData.connected ? "Connected" : "Disconnected");
+        lv_obj_set_style_text_color(connStatusLabel,
+            dryerData.connected ? COLOR_SUCCESS : COLOR_DANGER, 0);
+    }
 
     // Last update
-    if (dryerData.lastUpdateMs > 0) {
+    if (lv_obj_is_valid(lastUpdateLabel) && dryerData.lastUpdateMs > 0) {
         unsigned long ago = (millis() - dryerData.lastUpdateMs) / 1000;
         if (ago < 2) {
             lv_label_set_text(lastUpdateLabel, "Just now");
@@ -423,12 +437,16 @@ void updateDiagnosticsScreen() {
     }
 
     // Uptime
-    unsigned long up = millis() / 1000;
-    unsigned long h = up / 3600;
-    unsigned long m = (up % 3600) / 60;
-    unsigned long s = up % 60;
-    lv_label_set_text_fmt(uptimeLabel, "%lu:%02lu:%02lu", h, m, s);
+    if (lv_obj_is_valid(uptimeLabel)) {
+        unsigned long up = millis() / 1000;
+        unsigned long h = up / 3600;
+        unsigned long m = (up % 3600) / 60;
+        unsigned long s = up % 60;
+        lv_label_set_text_fmt(uptimeLabel, "%lu:%02lu:%02lu", h, m, s);
+    }
 
     // Free heap
-    lv_label_set_text_fmt(freeHeapLabel, "%lu KB", (unsigned long)(ESP.getFreeHeap() / 1024));
+    if (lv_obj_is_valid(freeHeapLabel)) {
+        lv_label_set_text_fmt(freeHeapLabel, "%lu KB", (unsigned long)(ESP.getFreeHeap() / 1024));
+    }
 }

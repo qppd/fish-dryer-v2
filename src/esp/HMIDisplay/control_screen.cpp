@@ -8,6 +8,14 @@
 #include "screen_manager.h"
 #include "serial_protocol.h"
 
+// Preset enumeration
+enum DryingPreset {
+    PRESET_TUYO,
+    PRESET_DANGGIT,
+    PRESET_PUSIT,
+    PRESET_OTHERS
+};
+
 // Widget references
 static lv_obj_t* tempSetLabel = NULL;
 static lv_obj_t* heaterSwitch = NULL;
@@ -19,40 +27,116 @@ static lv_obj_t* waterLossSlider = NULL;
 static lv_obj_t* waterLossSliderLabel = NULL;
 static lv_obj_t* currentTempLabel = NULL;
 static lv_obj_t* startDryingBtn = NULL;
+static lv_obj_t* stopDryingBtn = NULL;
+static lv_obj_t* tuyoBtn = NULL;
+static lv_obj_t* danggitBtn = NULL;
+static lv_obj_t* pusitBtn = NULL;
+static lv_obj_t* othersBtn = NULL;
+static lv_obj_t* manualTempRow = NULL;  // Hidden when preset selected
 
 static float tempSetpoint = 60.0f;
+static DryingPreset selectedPreset = PRESET_OTHERS;
 
-// Temperature +/- callbacks
+// Preset selection callbacks
+static void presetTuyoCb(lv_event_t* e) {
+    (void)e;
+    selectedPreset = PRESET_TUYO;
+    tempSetpoint = 60.0f;
+    dryerData.targetTemp = 60.0f;
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    sendSetTemperature(60.0f);
+    
+    // Hide manual controls, show preset buttons highlighted
+    lv_obj_add_flag(manualTempRow, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_color(tuyoBtn, COLOR_ACCENT, 0);
+    lv_obj_set_style_bg_color(danggitBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(pusitBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(othersBtn, COLOR_BG_BUTTON, 0);
+}
+
+static void presetDanggitCb(lv_event_t* e) {
+    (void)e;
+    selectedPreset = PRESET_DANGGIT;
+    tempSetpoint = 60.0f;
+    dryerData.targetTemp = 60.0f;
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    sendSetTemperature(60.0f);
+    
+    // Hide manual controls, show preset buttons highlighted
+    lv_obj_add_flag(manualTempRow, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_color(tuyoBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(danggitBtn, COLOR_ACCENT, 0);
+    lv_obj_set_style_bg_color(pusitBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(othersBtn, COLOR_BG_BUTTON, 0);
+}
+
+static void presetPusitCb(lv_event_t* e) {
+    (void)e;
+    selectedPreset = PRESET_PUSIT;
+    tempSetpoint = 50.0f;
+    dryerData.targetTemp = 50.0f;
+    { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    sendSetTemperature(50.0f);
+    
+    // Hide manual controls, show preset buttons highlighted
+    lv_obj_add_flag(manualTempRow, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_color(tuyoBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(danggitBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(pusitBtn, COLOR_ACCENT, 0);
+    lv_obj_set_style_bg_color(othersBtn, COLOR_BG_BUTTON, 0);
+}
+
+static void presetOthersCb(lv_event_t* e) {
+    (void)e;
+    selectedPreset = PRESET_OTHERS;
+    
+    // Show manual controls for custom temperature
+    lv_obj_clear_flag(manualTempRow, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_style_bg_color(tuyoBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(danggitBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(pusitBtn, COLOR_BG_BUTTON, 0);
+    lv_obj_set_style_bg_color(othersBtn, COLOR_ACCENT, 0);
+}
+
+// Temperature +/- callbacks (only for OTHERS preset)
 static void tempPlusCb(lv_event_t* e) {
     (void)e;
+    if (selectedPreset != PRESET_OTHERS) return;
     tempSetpoint += 1.0f;
     if (tempSetpoint > 100.0f) tempSetpoint = 100.0f;
     { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    dryerData.targetTemp = tempSetpoint;
     sendSetTemperature(tempSetpoint);
 }
 
 static void tempMinusCb(lv_event_t* e) {
     (void)e;
+    if (selectedPreset != PRESET_OTHERS) return;
     tempSetpoint -= 1.0f;
     if (tempSetpoint < 30.0f) tempSetpoint = 30.0f;
     { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    dryerData.targetTemp = tempSetpoint;
     sendSetTemperature(tempSetpoint);
 }
 
-// +5 / -5 for faster adjustment
+// +5 / -5 for faster adjustment (only for OTHERS preset)
 static void tempPlus5Cb(lv_event_t* e) {
     (void)e;
+    if (selectedPreset != PRESET_OTHERS) return;
     tempSetpoint += 5.0f;
     if (tempSetpoint > 100.0f) tempSetpoint = 100.0f;
     { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    dryerData.targetTemp = tempSetpoint;
     sendSetTemperature(tempSetpoint);
 }
 
 static void tempMinus5Cb(lv_event_t* e) {
     (void)e;
+    if (selectedPreset != PRESET_OTHERS) return;
     tempSetpoint -= 5.0f;
     if (tempSetpoint < 30.0f) tempSetpoint = 30.0f;
     { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    dryerData.targetTemp = tempSetpoint;
     sendSetTemperature(tempSetpoint);
 }
 
@@ -108,6 +192,12 @@ static void startDryingCb(lv_event_t* e) {
     sendSetTemperature(tempSetpoint);
     sendStartDrying();
     loadScreen(SCREEN_DASHBOARD);
+}
+
+// Stop drying callback
+static void stopDryingCb(lv_event_t* e) {
+    (void)e;
+    sendStopDrying();
 }
 
 // Helper: create a labeled switch row
@@ -169,45 +259,76 @@ lv_obj_t* createControlScreen() {
 
     // -- Temperature setpoint section --
     lv_obj_t* tempTitle = lv_label_create(leftCol);
-    lv_label_set_text(tempTitle, "Set Temperature");
+    lv_label_set_text(tempTitle, "Drying Preset");
     lv_obj_add_style(tempTitle, &style_text_label, 0);
 
-    lv_obj_t* tempRow = lv_obj_create(leftCol);
-    lv_obj_set_size(tempRow, LV_PCT(100), 65);
-    lv_obj_set_style_bg_opa(tempRow, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_border_width(tempRow, 0, 0);
-    lv_obj_set_style_pad_all(tempRow, 0, 0);
-    lv_obj_set_scrollbar_mode(tempRow, LV_SCROLLBAR_MODE_OFF);
-    lv_obj_set_flex_flow(tempRow, LV_FLEX_FLOW_ROW);
-    lv_obj_set_flex_align(tempRow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(tempRow, 8, 0);
+    // Preset selection buttons (row 1)
+    lv_obj_t* presetRow1 = lv_obj_create(leftCol);
+    lv_obj_set_size(presetRow1, LV_PCT(100), 55);
+    lv_obj_set_style_bg_opa(presetRow1, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(presetRow1, 0, 0);
+    lv_obj_set_style_pad_all(presetRow1, 0, 0);
+    lv_obj_set_scrollbar_mode(presetRow1, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_flow(presetRow1, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(presetRow1, LV_FLEX_ALIGN_SPACE_AROUND, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(presetRow1, 4, 0);
 
-    lv_obj_t* m5Btn = createButton(tempRow, "-5", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
-    lv_obj_add_event_cb(m5Btn, tempMinus5Cb, LV_EVENT_CLICKED, NULL);
+    tuyoBtn = createButton(presetRow1, "Tuyo\n60°C", 80, 50, &style_btn_nav);
+    lv_obj_add_event_cb(tuyoBtn, presetTuyoCb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t* mBtn = createButton(tempRow, "-", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
-    lv_obj_add_event_cb(mBtn, tempMinusCb, LV_EVENT_CLICKED, NULL);
+    danggitBtn = createButton(presetRow1, "Danggit\n60°C", 80, 50, &style_btn_nav);
+    lv_obj_add_event_cb(danggitBtn, presetDanggitCb, LV_EVENT_CLICKED, NULL);
 
-    // Temperature display card
-    lv_obj_t* tempDisplay = lv_obj_create(tempRow);
-    lv_obj_set_size(tempDisplay, 130, 55);
+    pusitBtn = createButton(presetRow1, "Pusit\n50°C", 80, 50, &style_btn_nav);
+    lv_obj_add_event_cb(pusitBtn, presetPusitCb, LV_EVENT_CLICKED, NULL);
+
+    othersBtn = createButton(presetRow1, "Others\nCustom", 80, 50, &style_btn_nav);
+    lv_obj_add_event_cb(othersBtn, presetOthersCb, LV_EVENT_CLICKED, NULL);
+
+    // Current temp display
+    lv_obj_t* tempDisplay = lv_obj_create(leftCol);
+    lv_obj_set_size(tempDisplay, LV_PCT(100), 55);
     lv_obj_set_style_bg_color(tempDisplay, lv_color_hex(0x141E30), 0);
     lv_obj_set_style_bg_opa(tempDisplay, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(tempDisplay, 8, 0);
     lv_obj_set_style_border_width(tempDisplay, 1, 0);
     lv_obj_set_style_border_color(tempDisplay, COLOR_ACCENT, 0);
     lv_obj_set_scrollbar_mode(tempDisplay, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_flow(tempDisplay, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(tempDisplay, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+
+    lv_obj_t* setLabel = lv_label_create(tempDisplay);
+    lv_label_set_text(setLabel, "SET:");
+    lv_obj_set_style_text_font(setLabel, FONT_SMALL, 0);
+    lv_obj_set_style_text_color(setLabel, COLOR_TEXT_SECONDARY, 0);
 
     tempSetLabel = lv_label_create(tempDisplay);
     { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
     lv_obj_set_style_text_font(tempSetLabel, FONT_XL, 0);
     lv_obj_set_style_text_color(tempSetLabel, COLOR_ACCENT, 0);
-    lv_obj_center(tempSetLabel);
 
-    lv_obj_t* pBtn = createButton(tempRow, "+", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
+    // Manual +/- controls row (hidden by default)
+    manualTempRow = lv_obj_create(leftCol);
+    lv_obj_set_size(manualTempRow, LV_PCT(100), 55);
+    lv_obj_set_style_bg_opa(manualTempRow, LV_OPA_TRANSP, 0);
+    lv_obj_set_style_border_width(manualTempRow, 0, 0);
+    lv_obj_set_style_pad_all(manualTempRow, 0, 0);
+    lv_obj_set_scrollbar_mode(manualTempRow, LV_SCROLLBAR_MODE_OFF);
+    lv_obj_set_flex_flow(manualTempRow, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(manualTempRow, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(manualTempRow, 8, 0);
+    lv_obj_add_flag(manualTempRow, LV_OBJ_FLAG_HIDDEN);  // Hidden until OTHERS selected
+
+    lv_obj_t* m5Btn = createButton(manualTempRow, "-5", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
+    lv_obj_add_event_cb(m5Btn, tempMinus5Cb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t* mBtn = createButton(manualTempRow, "-", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
+    lv_obj_add_event_cb(mBtn, tempMinusCb, LV_EVENT_CLICKED, NULL);
+
+    lv_obj_t* pBtn = createButton(manualTempRow, "+", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
     lv_obj_add_event_cb(pBtn, tempPlusCb, LV_EVENT_CLICKED, NULL);
 
-    lv_obj_t* p5Btn = createButton(tempRow, "+5", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
+    lv_obj_t* p5Btn = createButton(manualTempRow, "+5", BTN_MIN_SIZE, BTN_MIN_SIZE, &style_btn_nav);
     lv_obj_add_event_cb(p5Btn, tempPlus5Cb, LV_EVENT_CLICKED, NULL);
 
     // Current temperature display
@@ -304,6 +425,9 @@ lv_obj_t* createControlScreen() {
     startDryingBtn = createButton(rightCol, LV_SYMBOL_PLAY "  START DRYING", LV_PCT(100), 55, &style_btn_success);
     lv_obj_add_event_cb(startDryingBtn, startDryingCb, LV_EVENT_CLICKED, NULL);
 
+    stopDryingBtn = createButton(rightCol, LV_SYMBOL_STOP "  STOP DRYING", LV_PCT(100), 55, &style_btn_danger);
+    lv_obj_add_event_cb(stopDryingBtn, stopDryingCb, LV_EVENT_CLICKED, NULL);
+
     // Set initial mode state (Auto = relay switches disabled)
     if (dryerData.dryingModeAuto) {
         lv_obj_add_state(heaterSwitch, LV_STATE_DISABLED);
@@ -317,15 +441,60 @@ lv_obj_t* createControlScreen() {
 void updateControlScreen() {
     if (!currentTempLabel) return;
 
-    { char _b[24]; snprintf(_b, sizeof(_b), "Current: %.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(currentTempLabel, _b); }
+    // Sync with dryer data
+    tempSetpoint = dryerData.targetTemp;
+    
+    if (lv_obj_is_valid(tempSetLabel)) {
+        { char _b[12]; snprintf(_b, sizeof(_b), "%.0f \xC2\xB0C", tempSetpoint); lv_label_set_text(tempSetLabel, _b); }
+    }
+    
+    if (lv_obj_is_valid(currentTempLabel)) {
+        { char _b[24]; snprintf(_b, sizeof(_b), "Current: %.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(currentTempLabel, _b); }
+    }
+
+    // ---- START/STOP Button Visibility based on System State ----
+    if (lv_obj_is_valid(startDryingBtn) && lv_obj_is_valid(stopDryingBtn)) {
+        switch (dryerData.systemState) {
+            case STATE_IDLE:
+                lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_DRYING:
+                lv_obj_add_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_COMPLETE:
+                lv_obj_add_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_ERROR:
+                lv_obj_add_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            case STATE_PAUSED:
+                lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+            default:
+                lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                break;
+        }
+    }
 
     // Sync switch states with actual relay states
-    if (dryerData.heaterOn) lv_obj_add_state(heaterSwitch, LV_STATE_CHECKED);
-    else lv_obj_clear_state(heaterSwitch, LV_STATE_CHECKED);
+    if (lv_obj_is_valid(heaterSwitch)) {
+        if (dryerData.heaterOn) lv_obj_add_state(heaterSwitch, LV_STATE_CHECKED);
+        else lv_obj_clear_state(heaterSwitch, LV_STATE_CHECKED);
+    }
 
-    if (dryerData.fanOn) lv_obj_add_state(fanSwitch, LV_STATE_CHECKED);
-    else lv_obj_clear_state(fanSwitch, LV_STATE_CHECKED);
+    if (lv_obj_is_valid(fanSwitch)) {
+        if (dryerData.fanOn) lv_obj_add_state(fanSwitch, LV_STATE_CHECKED);
+        else lv_obj_clear_state(fanSwitch, LV_STATE_CHECKED);
+    }
 
-    if (dryerData.exhaustOn) lv_obj_add_state(exhaustSwitch, LV_STATE_CHECKED);
-    else lv_obj_clear_state(exhaustSwitch, LV_STATE_CHECKED);
+    if (lv_obj_is_valid(exhaustSwitch)) {
+        if (dryerData.exhaustOn) lv_obj_add_state(exhaustSwitch, LV_STATE_CHECKED);
+        else lv_obj_clear_state(exhaustSwitch, LV_STATE_CHECKED);
+    }
 }
