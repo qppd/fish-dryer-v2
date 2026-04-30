@@ -13,7 +13,7 @@ static lv_img_dsc_t* logoImage = NULL;
 
 static const char* bootMessages[] = {
     "Initializing sensors...",
-    "Connecting to controller...",
+    "Connecting to controller...", 
     "Loading configuration...",
     "Starting system...",
     "Ready"
@@ -69,8 +69,8 @@ lv_img_dsc_t* loadImageFromSD(fs::FS *fs, const char* path) {
     }
 
     // Create LVGL image descriptor
-    // NOTE: LVGL expects the image data to be in a specific binary format (RGB565 or C array)
-    // For PNG files, LVGL needs the PNG decoder enabled or the file pre-converted
+    // NOTE: For PNG support, ensure LV_USE_PNG is enabled in lv_conf.h
+    // If LV_USE_PNG is not enabled, consider pre-converting PNG to C array format
     logoImage = (lv_img_dsc_t*)malloc(sizeof(lv_img_dsc_t));
     if (!logoImage) {
         Serial.println("[BOOT] ERROR: Failed to allocate image descriptor");
@@ -80,11 +80,10 @@ lv_img_dsc_t* loadImageFromSD(fs::FS *fs, const char* path) {
     }
 
     // Set image descriptor
-    // For PNG support, ensure LV_USE_PNG is enabled in lv_conf.h
     logoImage->header.always_zero = 0;
     logoImage->header.w = 200;  // Adjust to your image dimensions
     logoImage->header.h = 200;
-    logoImage->header.cf = LV_IMG_CF_RAW_ALPHA;  // Adjust color format as needed
+    logoImage->header.cf = LV_IMG_CF_RAW_ALPHA;
     logoImage->data = imageBuf;
     logoImage->data_size = imageBufSize;
 
@@ -92,10 +91,24 @@ lv_img_dsc_t* loadImageFromSD(fs::FS *fs, const char* path) {
     return logoImage;
 }
 
+// Cleanup image resources
+void cleanupImageResources() {
+    if (imageBuf) {
+        free(imageBuf);
+        imageBuf = NULL;
+    }
+    if (logoImage) {
+        free(logoImage);
+        logoImage = NULL;
+    }
+    imageBufSize = 0;
+}
+
 // Timer callback: boot complete
 static void bootCompleteCallback(lv_timer_t* timer) {
     (void)timer;
     Serial.println("[BOOT] Boot sequence complete!");
+    cleanupImageResources();
 }
 
 // Animation callback: update progress bar value

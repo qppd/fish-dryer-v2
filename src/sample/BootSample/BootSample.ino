@@ -15,6 +15,7 @@
 //   LV_FONT_MONTSERRAT_16, _20, _36, _48
 
 #include <Arduino.h>
+#include "esp_panel_board_custom_conf.h"
 #include <esp_display_panel.hpp>
 #include <lvgl.h>
 #include "lvgl_v8_port.h"
@@ -77,22 +78,33 @@ void setup() {
     // ========== Initialize Display ==========
     Serial.println("[BOOT] Initializing display board...");
     Board *board = new Board();
-    board->init();
+    if (!board->init()) {
+        Serial.println("[BOOT] ERROR: Failed to initialize display board!");
+        return;
+    }
 
 #if LVGL_PORT_AVOID_TEARING_MODE
     auto lcd = board->getLCD();
-    lcd->configFrameBufferNumber(LVGL_PORT_DISP_BUFFER_NUM);
+    if (lcd) {
+        lcd->configFrameBufferNumber(LVGL_PORT_DISP_BUFFER_NUM);
 #if ESP_PANEL_DRIVERS_BUS_ENABLE_RGB && CONFIG_IDF_TARGET_ESP32S3
-    auto lcd_bus = lcd->getBus();
-    if (lcd_bus->getBasicAttributes().type == ESP_PANEL_BUS_TYPE_RGB) {
-        static_cast<BusRGB *>(lcd_bus)->configRGB_BounceBufferSize(lcd->getFrameWidth() * 10);
+        auto lcd_bus = lcd->getBus();
+        if (lcd_bus && lcd_bus->getBasicAttributes().type == ESP_PANEL_BUS_TYPE_RGB) {
+            static_cast<BusRGB *>(lcd_bus)->configRGB_BounceBufferSize(lcd->getFrameWidth() * 10);
+        }
+#endif
     }
 #endif
-#endif
-    assert(board->begin());
+    if (!board->begin()) {
+        Serial.println("[BOOT] ERROR: Failed to begin display board!");
+        return;
+    }
 
     Serial.println("[BOOT] Initializing LVGL...");
-    lvgl_port_init(board->getLCD(), board->getTouch());
+    if (!lvgl_port_init(board->getLCD(), board->getTouch())) {
+        Serial.println("[BOOT] ERROR: Failed to initialize LVGL!");
+        return;
+    }
 
     // Build the UI (must hold LVGL mutex)
     Serial.println("[BOOT] Building UI...");
