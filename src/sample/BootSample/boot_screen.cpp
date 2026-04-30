@@ -5,11 +5,11 @@
 #include "boot_screen.h"
 #include "ui_theme.h"
 #include "ui_styles.h"
+#include "solaraw.h"
 
 static lv_obj_t* boot_bar = NULL;
 static lv_obj_t* boot_status_label = NULL;
 static lv_anim_t boot_bar_anim;
-static lv_img_dsc_t* logoImage = NULL;
 
 static const char* bootMessages[] = {
     "Initializing sensors...",
@@ -19,96 +19,10 @@ static const char* bootMessages[] = {
     "Ready"
 };
 
-// Allocate buffer for PNG image data
-static uint8_t* imageBuf = NULL;
-static size_t imageBufSize = 0;
-
-// Load PNG image from SD card
-lv_img_dsc_t* loadImageFromSD(fs::FS *fs, const char* path) {
-    if (!fs) {
-        Serial.println("[BOOT] ERROR: No SD card filesystem provided");
-        return NULL;
-    }
-
-    Serial.printf("[BOOT] Loading image from: %s\n", path);
-    
-    File file = fs->open(path, FILE_READ);
-    if (!file) {
-        Serial.printf("[BOOT] ERROR: Cannot open image file: %s\n", path);
-        return NULL;
-    }
-
-    // Get file size
-    size_t fileSize = file.size();
-    if (fileSize == 0) {
-        Serial.println("[BOOT] ERROR: Image file is empty");
-        file.close();
-        return NULL;
-    }
-
-    Serial.printf("[BOOT] Image file size: %u bytes\n", fileSize);
-
-    // Allocate buffer for image data
-    imageBufSize = fileSize;
-    imageBuf = (uint8_t*)malloc(imageBufSize);
-    if (!imageBuf) {
-        Serial.println("[BOOT] ERROR: Failed to allocate image buffer");
-        file.close();
-        return NULL;
-    }
-
-    // Read file into buffer
-    size_t bytesRead = file.read(imageBuf, imageBufSize);
-    file.close();
-
-    if (bytesRead != imageBufSize) {
-        Serial.printf("[BOOT] ERROR: Failed to read entire image file (%u/%u bytes)\n", bytesRead, imageBufSize);
-        free(imageBuf);
-        imageBuf = NULL;
-        return NULL;
-    }
-
-    // Create LVGL image descriptor
-    // NOTE: For PNG support, ensure LV_USE_PNG is enabled in lv_conf.h
-    // If LV_USE_PNG is not enabled, consider pre-converting PNG to C array format
-    logoImage = (lv_img_dsc_t*)malloc(sizeof(lv_img_dsc_t));
-    if (!logoImage) {
-        Serial.println("[BOOT] ERROR: Failed to allocate image descriptor");
-        free(imageBuf);
-        imageBuf = NULL;
-        return NULL;
-    }
-
-    // Set image descriptor
-    logoImage->header.always_zero = 0;
-    logoImage->header.w = 200;  // Adjust to your image dimensions
-    logoImage->header.h = 200;
-    logoImage->header.cf = LV_IMG_CF_RAW_ALPHA;
-    logoImage->data = imageBuf;
-    logoImage->data_size = imageBufSize;
-
-    Serial.printf("[BOOT] Image loaded successfully (%ux%u)\n", logoImage->header.w, logoImage->header.h);
-    return logoImage;
-}
-
-// Cleanup image resources
-void cleanupImageResources() {
-    if (imageBuf) {
-        free(imageBuf);
-        imageBuf = NULL;
-    }
-    if (logoImage) {
-        free(logoImage);
-        logoImage = NULL;
-    }
-    imageBufSize = 0;
-}
-
 // Timer callback: boot complete
 static void bootCompleteCallback(lv_timer_t* timer) {
     (void)timer;
     Serial.println("[BOOT] Boot sequence complete!");
-    cleanupImageResources();
 }
 
 // Animation callback: update progress bar value
@@ -127,38 +41,19 @@ static void pulseAnimCb(void* var, int32_t v) {
     lv_obj_set_style_opa((lv_obj_t*)var, (lv_opa_t)v, 0);
 }
 
-lv_obj_t* createBootScreen(fs::FS *sdfs) {
+lv_obj_t* createBootScreen() {
     lv_obj_t* scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, &style_screen_bg, 0);
     lv_obj_set_scrollbar_mode(scr, LV_SCROLLBAR_MODE_OFF);
 
     // ---- Logo/Icon (Image from SD card or fallback to symbol) ----
     lv_obj_t* icon = NULL;
-    bool imageLoaded = false;
-
-    // Try to load image from SD card
-    if (sdfs) {
-        lv_img_dsc_t* imgDsc = loadImageFromSD(sdfs, "/solaraw.png");
-        if (imgDsc) {
-            icon = lv_img_create(scr);
-            lv_img_set_src(icon, imgDsc);
-            lv_obj_center(icon);
-            // Move up from center
-            lv_obj_align(icon, LV_ALIGN_CENTER, 0, -100);
-            imageLoaded = true;
-            Serial.println("[BOOT] Using PNG logo from SD card");
-        }
-    }
-
-    // Fallback to symbol if image loading failed
-    if (!imageLoaded) {
-        Serial.println("[BOOT] Using fallback lightning bolt symbol");
-        icon = lv_label_create(scr);
-        lv_label_set_text(icon, LV_SYMBOL_CHARGE);
-        lv_obj_set_style_text_font(icon, FONT_HUGE, 0);
-        lv_obj_set_style_text_color(icon, COLOR_ACCENT, 0);
-        lv_obj_align(icon, LV_ALIGN_CENTER, 0, -100);
-    }
+    icon = lv_img_create(scr);
+    lv_img_set_src(icon, &solaraw);
+    lv_obj_center(icon);
+    // Move up from center
+    lv_obj_align(icon, LV_ALIGN_CENTER, 0, -100);
+    Serial.println("[BOOT] Using compiled solaraw image (C array)");
 
     // Pulse animation on icon (works for both image and symbol)
     lv_anim_t pulse;

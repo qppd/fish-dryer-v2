@@ -2,7 +2,7 @@
 // Standalone bootscreen demonstration for Fish Dryer V2 HMI
 // 
 // This sketch displays a complete bootscreen animation with:
-// - Custom logo image from SD card (solaraw.png)
+// - Custom logo image from compiled C array (solaraw.c)
 // - Pulsing icon animation
 // - Fading title
 // - Animated progress bar
@@ -19,9 +19,6 @@
 #include <esp_display_panel.hpp>
 #include <lvgl.h>
 #include "lvgl_v8_port.h"
-#include "FS.h"
-#include "SD.h"
-#include "SPI.h"
 
 #include "ui_theme.h"
 #include "ui_styles.h"
@@ -29,12 +26,6 @@
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
-
-// SD card pin definitions
-#define SD_MOSI 11
-#define SD_CLK  12
-#define SD_MISO 13
-#define SD_SS   14
 
 // LVGL timer callback for periodic updates
 static void uiUpdateTimerCb(lv_timer_t* timer) {
@@ -46,34 +37,7 @@ void setup() {
     Serial.begin(115200);
     delay(1000);  // Wait for serial connection
     
-    Serial.println("\n\n=== Boot Screen Sample with SD Card Logo ===");
-    
-    // ========== Initialize SD Card ==========
-    Serial.println("[BOOT] Initializing SD card...");
-    SPI.setHwCs(false);
-    SPI.begin(SD_CLK, SD_MISO, SD_MOSI, SD_SS);
-    
-    if (!SD.begin(SD_SS)) {
-        Serial.println("[BOOT] WARNING: SD card mount failed - will use fallback symbol");
-    } else {
-        uint8_t cardType = SD.cardType();
-        if (cardType == CARD_NONE) {
-            Serial.println("[BOOT] WARNING: No SD card detected");
-        } else {
-            Serial.print("[BOOT] SD Card Type: ");
-            if (cardType == CARD_MMC) {
-                Serial.println("MMC");
-            } else if (cardType == CARD_SD) {
-                Serial.println("SDSC");
-            } else if (cardType == CARD_SDHC) {
-                Serial.println("SDHC");
-            } else {
-                Serial.println("UNKNOWN");
-            }
-            uint64_t cardSize = SD.cardSize() / (1024 * 1024);
-            Serial.printf("[BOOT] SD Card Size: %lluMB\n", cardSize);
-        }
-    }
+    Serial.println("\n\n=== Boot Screen Sample with Compiled Logo ===");
 
     // ========== Initialize Display ==========
     Serial.println("[BOOT] Initializing display board...");
@@ -113,8 +77,8 @@ void setup() {
     // Initialize styles
     initStyles();
 
-    // Create and display boot screen with SD card support
-    lv_obj_t* bootScr = createBootScreen(&SD);
+    // Create and display boot screen with compiled image support
+    lv_obj_t* bootScr = createBootScreen();
     if (bootScr) {
         lv_scr_load(bootScr);
         Serial.println("[BOOT] Boot screen displayed");
