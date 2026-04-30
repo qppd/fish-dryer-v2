@@ -49,6 +49,7 @@ static bool optimisticFanOn = false;
 static bool optimisticExhaustOn = false;
 static bool optimisticShowStart = true;
 static bool optimisticShowStop = false;
+static DryerState optimisticSystemState = STATE_IDLE;
 
 static void applyStartStopVisibility(bool showStart, bool showStop) {
     if (lv_obj_is_valid(startBtn)) {
@@ -62,14 +63,15 @@ static void applyStartStopVisibility(bool showStart, bool showStop) {
 }
 
 static void setOptimisticUiState(bool heaterOn, bool fanOn, bool exhaustOn,
-                                 bool showStart, bool showStop) {
+                                 bool showStart, bool showStop, DryerState state) {
     uiOptimisticActive = true;
-    uiOptimisticUntilMs = millis() + 2500;
+    uiOptimisticUntilMs = millis() + 15000;
     optimisticHeaterOn = heaterOn;
     optimisticFanOn = fanOn;
     optimisticExhaustOn = exhaustOn;
     optimisticShowStart = showStart;
     optimisticShowStop = showStop;
+    optimisticSystemState = state;
 
     applyStartStopVisibility(showStart, showStop);
     updateIndicator(heaterIndicator, heaterOn);
@@ -88,7 +90,8 @@ static void startBtnCb(lv_event_t* e) {
     dryerData.heaterOn = true;
     dryerData.fanOn = true;
     dryerData.exhaustOn = false;
-    setOptimisticUiState(true, true, false, false, true);
+    dryerData.dryingStartMs = millis();
+    setOptimisticUiState(true, true, false, false, true, STATE_DRYING);
     sendStartDrying();
 }
 
@@ -98,7 +101,7 @@ static void stopBtnCb(lv_event_t* e) {
     dryerData.heaterOn = false;
     dryerData.fanOn = false;
     dryerData.exhaustOn = true;
-    setOptimisticUiState(false, false, true, true, false);
+    setOptimisticUiState(false, false, true, true, false, STATE_IDLE);
     sendStopDrying();
 }
 
@@ -448,6 +451,7 @@ void updateDashboardScreen() {
     if (uiOptimisticActive && millis() >= uiOptimisticUntilMs) {
         uiOptimisticActive = false;
     }
+    DryerState effectiveState = uiOptimisticActive ? optimisticSystemState : dryerData.systemState;
 
     // Relay indicators
     if (uiOptimisticActive) {
@@ -463,7 +467,7 @@ void updateDashboardScreen() {
     // System state
     if (lv_obj_is_valid(stateLabel)) {
         const char* stateText;
-        switch (dryerData.systemState) {
+        switch (effectiveState) {
             case STATE_DRYING:   stateText = "DRYING"; break;
             case STATE_COMPLETE: stateText = "COMPLETE"; break;
             case STATE_ERROR:    stateText = "ERROR"; break;
@@ -471,7 +475,7 @@ void updateDashboardScreen() {
             default:             stateText = "IDLE"; break;
         }
         lv_label_set_text(stateLabel, stateText);
-        lv_obj_set_style_text_color(stateLabel, getStateColor(dryerData.systemState), 0);
+        lv_obj_set_style_text_color(stateLabel, getStateColor(effectiveState), 0);
     }
 
     // ---- START/STOP Button Visibility based on state (or optimistic action) ----
@@ -505,7 +509,7 @@ void updateDashboardScreen() {
 
     // Elapsed time
     if (lv_obj_is_valid(elapsedLabel)) {
-        if (dryerData.systemState == STATE_DRYING && dryerData.dryingStartMs > 0) {
+        if (effectiveState == STATE_DRYING && dryerData.dryingStartMs > 0) {
             unsigned long elapsed = millis() - dryerData.dryingStartMs;
             unsigned long secs = elapsed / 1000;
             unsigned long mins = secs / 60;
@@ -518,17 +522,17 @@ void updateDashboardScreen() {
 
     // ---- Estimated Drying Time (EDT) based on humidity decrease ----
     // Capture start-of-drying sample whenever a new drying session begins
-    if (dryerData.systemState == STATE_DRYING && edt_lastState != STATE_DRYING) {
+    if (effectiveState == STATE_DRYING && edt_lastState != STATE_DRYING) {
         edt_startHumidity = dryerData.humidity;
         edt_startMs       = millis();
     }
     // Clear tracking when drying stops
-    if (dryerData.systemState != STATE_DRYING) {
+    if (effectiveState != STATE_DRYING) {
         edt_startMs = 0;
     }
-    edt_lastState = dryerData.systemState;
+    edt_lastState = effectiveState;
 
-    if (lv_obj_is_valid(edtLabel) && dryerData.systemState == STATE_DRYING && edt_startMs > 0) {
+    if (lv_obj_is_valid(edtLabel) && effectiveState == STATE_DRYING && edt_startMs > 0) {
         float elapsedMins  = (millis() - edt_startMs) / 60000.0f;
         float humidityDrop = edt_startHumidity - dryerData.humidity;
 

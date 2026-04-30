@@ -76,7 +76,7 @@ static void applyRelaySwitchStates(bool heaterOn, bool fanOn, bool exhaustOn) {
 static void setOptimisticUiState(bool heaterOn, bool fanOn, bool exhaustOn,
                                  bool showStart, bool showStop) {
     uiOptimisticActive = true;
-    uiOptimisticUntilMs = millis() + 2500;  // small grace period for status catch-up
+    uiOptimisticUntilMs = millis() + 15000;  // 15-second grace period for status catch-up
     optimisticHeaterOn = heaterOn;
     optimisticFanOn = fanOn;
     optimisticExhaustOn = exhaustOn;
