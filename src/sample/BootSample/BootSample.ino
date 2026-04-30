@@ -3,7 +3,7 @@
 // 
 // This sketch displays a complete bootscreen animation with:
 // - Custom logo image from compiled C array (solaraw.c)
-// - Pulsing icon animation
+// - Static logo (no icon pulse animation)
 // - Fading title
 // - Animated progress bar
 // - Status text updates
@@ -27,7 +27,7 @@
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
 
-// LVGL timer callback for periodic updates
+// LVGL timer for periodic UI updates
 static void uiUpdateTimerCb(lv_timer_t* timer) {
     (void)timer;
     // Periodic UI update (called every 50ms)
@@ -37,7 +37,7 @@ void setup() {
     Serial.begin(115200);
     Serial.println("=== Boot Screen Sample with Compiled Logo ===");
 
-    // ========== Initialize Display ==========
+    // Initialize display board
     Serial.println("[HMI] Initializing display board...");
     Board *board = new Board();
     board->init();
@@ -54,36 +54,40 @@ void setup() {
 #endif
     assert(board->begin());
 
+    // Initialize LVGL
     Serial.println("[HMI] Initializing LVGL...");
     lvgl_port_init(board->getLCD(), board->getTouch());
 
+    // Initialize boot screen flow
+    Serial.println("[HMI] Initializing boot screen...");
+
     // Build the UI (must hold LVGL mutex)
-    Serial.println("[BOOT] Building UI...");
+    Serial.println("[HMI] Building UI...");
     lvgl_port_lock(-1);
 
-    // Initialize styles
+    // Initialize styles and theme
     initStyles();
 
     // Create and display boot screen with compiled image support
     lv_obj_t* bootScr = createBootScreen();
     if (bootScr) {
         lv_scr_load(bootScr);
-        Serial.println("[BOOT] Boot screen displayed");
+        Serial.println("[HMI] Screen Loaded: BOOT");
     } else {
-        Serial.println("[BOOT] ERROR: Failed to create boot screen!");
+        Serial.println("[HMI] ERROR: Failed to create boot screen!");
     }
 
-    // Create periodic timer for UI updates (every 50ms)
+    // Create periodic timer for UI updates
     lv_timer_create(uiUpdateTimerCb, 50, NULL);
 
     lvgl_port_unlock();
 
-    Serial.println("[BOOT] Setup complete!");
-    Serial.printf("[BOOT] Free heap: %lu KB\n", (unsigned long)(ESP.getFreeHeap() / 1024));
-    Serial.println("[BOOT] Boot screen will display for 3 seconds with animations...\n");
+    Serial.println("[HMI] Initialization complete!");
+    Serial.printf("[HMI] Free heap: %lu KB\n", (unsigned long)(ESP.getFreeHeap() / 1024));
+    Serial.println("[HMI] Boot screen will display for 3 seconds with animations...\n");
 }
 
 void loop() {
-    // Main loop - LVGL handles rendering via timer task
+    // Handle UI updates (non-blocking)
     delay(50);
 }

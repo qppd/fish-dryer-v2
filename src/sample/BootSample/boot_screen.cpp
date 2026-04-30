@@ -1,6 +1,6 @@
 // boot_screen.cpp
 // Standalone bootscreen implementation for Fish Dryer V2 HMI
-// Supports loading logo image from SD card
+// Uses compiled logo image from C array
 
 #include <Arduino.h>
 #include "boot_screen.h"
@@ -37,11 +37,6 @@ static void bootBarAnimCb(void* var, int32_t v) {
     }
 }
 
-// Pulse animation callback
-static void pulseAnimCb(void* var, int32_t v) {
-    lv_obj_set_style_opa((lv_obj_t*)var, (lv_opa_t)v, 0);
-}
-
 lv_obj_t* createBootScreen() {
     lv_obj_t* scr = lv_obj_create(NULL);
     lv_obj_add_style(scr, &style_screen_bg, 0);
@@ -55,17 +50,6 @@ lv_obj_t* createBootScreen() {
     // Move up from center
     lv_obj_align(icon, LV_ALIGN_CENTER, 0, -100);
     Serial.println("[BOOT] Using compiled solaraw image (C array)");
-
-    // Pulse animation on icon (works for both image and symbol)
-    lv_anim_t pulse;
-    lv_anim_init(&pulse);
-    lv_anim_set_var(&pulse, icon);
-    lv_anim_set_values(&pulse, 80, 255);
-    lv_anim_set_time(&pulse, 800);
-    lv_anim_set_playback_time(&pulse, 800);
-    lv_anim_set_repeat_count(&pulse, 3);
-    lv_anim_set_exec_cb(&pulse, pulseAnimCb);
-    lv_anim_start(&pulse);
 
     // ---- Title ----
     lv_obj_t* title = lv_label_create(scr);
@@ -81,7 +65,9 @@ lv_obj_t* createBootScreen() {
     lv_anim_set_var(&fadeIn, title);
     lv_anim_set_values(&fadeIn, 0, 255);
     lv_anim_set_time(&fadeIn, ANIM_BOOT_FADE);
-    lv_anim_set_exec_cb(&fadeIn, pulseAnimCb);
+    lv_anim_set_exec_cb(&fadeIn, [](void* var, int32_t v) {
+        lv_obj_set_style_opa((lv_obj_t*)var, (lv_opa_t)v, 0);
+    });
     lv_anim_start(&fadeIn);
 
     // ---- Subtitle ----
