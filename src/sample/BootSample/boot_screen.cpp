@@ -2,6 +2,7 @@
 // Standalone bootscreen implementation for Fish Dryer V2 HMI
 // Supports loading logo image from SD card
 
+#include <Arduino.h>
 #include "boot_screen.h"
 #include "ui_theme.h"
 #include "ui_styles.h"
