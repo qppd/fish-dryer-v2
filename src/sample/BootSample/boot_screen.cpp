@@ -24,7 +24,7 @@ lv_obj_t* createBootScreen() {
     icon = lv_img_create(scr);
     lv_img_set_src(icon, &solaraw);
     // Scale down image size on screen (256 = 100%)
-    lv_img_set_zoom(icon, 128);  // ~50%
+    lv_img_set_zoom(icon, 102);  // ~50%
     lv_obj_center(icon);
     // Move up from center
     lv_obj_align(icon, LV_ALIGN_CENTER, 0, -100);
