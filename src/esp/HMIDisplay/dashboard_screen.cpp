@@ -39,6 +39,44 @@ static float        edt_startHumidity = 0.0f;
 static unsigned long edt_startMs       = 0;
 static DryerState   edt_lastState      = STATE_IDLE;
 
+static void updateIndicator(lv_obj_t* dot, bool isOn);
+
+// Optimistic UI state after START/STOP click for immediate feedback
+static bool uiOptimisticActive = false;
+static unsigned long uiOptimisticUntilMs = 0;
+static bool optimisticHeaterOn = false;
+static bool optimisticFanOn = false;
+static bool optimisticExhaustOn = false;
+static bool optimisticShowStart = true;
+static bool optimisticShowStop = false;
+
+static void applyStartStopVisibility(bool showStart, bool showStop) {
+    if (lv_obj_is_valid(startBtn)) {
+        if (showStart) lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (lv_obj_is_valid(stopBtn)) {
+        if (showStop) lv_obj_clear_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void setOptimisticUiState(bool heaterOn, bool fanOn, bool exhaustOn,
+                                 bool showStart, bool showStop) {
+    uiOptimisticActive = true;
+    uiOptimisticUntilMs = millis() + 2500;
+    optimisticHeaterOn = heaterOn;
+    optimisticFanOn = fanOn;
+    optimisticExhaustOn = exhaustOn;
+    optimisticShowStart = showStart;
+    optimisticShowStop = showStop;
+
+    applyStartStopVisibility(showStart, showStop);
+    updateIndicator(heaterIndicator, heaterOn);
+    updateIndicator(fanIndicator, fanOn);
+    updateIndicator(exhaustIndicator, exhaustOn);
+}
+
 // Navigation callbacks
 static void navControlCb(lv_event_t* e) { (void)e; loadScreen(SCREEN_CONTROL); }
 static void navAnalyticsCb(lv_event_t* e) { (void)e; loadScreen(SCREEN_ANALYTICS); }
@@ -46,11 +84,21 @@ static void navDiagnosticsCb(lv_event_t* e) { (void)e; loadScreen(SCREEN_DIAGNOS
 
 static void startBtnCb(lv_event_t* e) {
     (void)e;
+    dryerData.systemState = STATE_DRYING;
+    dryerData.heaterOn = true;
+    dryerData.fanOn = true;
+    dryerData.exhaustOn = false;
+    setOptimisticUiState(true, true, false, false, true);
     sendStartDrying();
 }
 
 static void stopBtnCb(lv_event_t* e) {
     (void)e;
+    dryerData.systemState = STATE_IDLE;
+    dryerData.heaterOn = false;
+    dryerData.fanOn = false;
+    dryerData.exhaustOn = true;
+    setOptimisticUiState(false, false, true, true, false);
     sendStopDrying();
 }
 
@@ -397,10 +445,20 @@ void updateDashboardScreen() {
         }
     }
 
+    if (uiOptimisticActive && millis() >= uiOptimisticUntilMs) {
+        uiOptimisticActive = false;
+    }
+
     // Relay indicators
-    updateIndicator(heaterIndicator, dryerData.heaterOn);
-    updateIndicator(fanIndicator, dryerData.fanOn);
-    updateIndicator(exhaustIndicator, dryerData.exhaustOn);
+    if (uiOptimisticActive) {
+        updateIndicator(heaterIndicator, optimisticHeaterOn);
+        updateIndicator(fanIndicator, optimisticFanOn);
+        updateIndicator(exhaustIndicator, optimisticExhaustOn);
+    } else {
+        updateIndicator(heaterIndicator, dryerData.heaterOn);
+        updateIndicator(fanIndicator, dryerData.fanOn);
+        updateIndicator(exhaustIndicator, dryerData.exhaustOn);
+    }
 
     // System state
     if (lv_obj_is_valid(stateLabel)) {
@@ -416,32 +474,26 @@ void updateDashboardScreen() {
         lv_obj_set_style_text_color(stateLabel, getStateColor(dryerData.systemState), 0);
     }
 
-    // ---- START/STOP Button Visibility based on System State ----
-    if (lv_obj_is_valid(startBtn) && lv_obj_is_valid(stopBtn)) {
+    // ---- START/STOP Button Visibility based on state (or optimistic action) ----
+    if (uiOptimisticActive) {
+        applyStartStopVisibility(optimisticShowStart, optimisticShowStop);
+    } else {
         switch (dryerData.systemState) {
             case STATE_IDLE:
-                lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(true, false);
                 break;
             case STATE_DRYING:
-                lv_obj_add_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(false, true);
                 break;
             case STATE_COMPLETE:
-                lv_obj_add_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
-                break;
             case STATE_ERROR:
-                lv_obj_add_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(false, false);
                 break;
             case STATE_PAUSED:
-                lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(true, true);
                 break;
             default:
-                lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(true, false);
                 break;
         }
     }

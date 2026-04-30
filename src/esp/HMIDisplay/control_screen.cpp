@@ -37,6 +37,56 @@ static lv_obj_t* manualTempRow = NULL;  // Hidden when preset selected
 static float tempSetpoint = 60.0f;
 static DryingPreset selectedPreset = PRESET_OTHERS;
 
+// Optimistic UI state after START/STOP click so indicators/buttons react
+// immediately without waiting for the next status packet from controller.
+static bool uiOptimisticActive = false;
+static unsigned long uiOptimisticUntilMs = 0;
+static bool optimisticHeaterOn = false;
+static bool optimisticFanOn = false;
+static bool optimisticExhaustOn = false;
+static bool optimisticShowStart = true;
+static bool optimisticShowStop = false;
+
+static void applyStartStopVisibility(bool showStart, bool showStop) {
+    if (lv_obj_is_valid(startDryingBtn)) {
+        if (showStart) lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
+    }
+    if (lv_obj_is_valid(stopDryingBtn)) {
+        if (showStop) lv_obj_clear_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+        else lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+    }
+}
+
+static void applyRelaySwitchStates(bool heaterOn, bool fanOn, bool exhaustOn) {
+    if (lv_obj_is_valid(heaterSwitch)) {
+        if (heaterOn) lv_obj_add_state(heaterSwitch, LV_STATE_CHECKED);
+        else lv_obj_clear_state(heaterSwitch, LV_STATE_CHECKED);
+    }
+    if (lv_obj_is_valid(fanSwitch)) {
+        if (fanOn) lv_obj_add_state(fanSwitch, LV_STATE_CHECKED);
+        else lv_obj_clear_state(fanSwitch, LV_STATE_CHECKED);
+    }
+    if (lv_obj_is_valid(exhaustSwitch)) {
+        if (exhaustOn) lv_obj_add_state(exhaustSwitch, LV_STATE_CHECKED);
+        else lv_obj_clear_state(exhaustSwitch, LV_STATE_CHECKED);
+    }
+}
+
+static void setOptimisticUiState(bool heaterOn, bool fanOn, bool exhaustOn,
+                                 bool showStart, bool showStop) {
+    uiOptimisticActive = true;
+    uiOptimisticUntilMs = millis() + 2500;  // small grace period for status catch-up
+    optimisticHeaterOn = heaterOn;
+    optimisticFanOn = fanOn;
+    optimisticExhaustOn = exhaustOn;
+    optimisticShowStart = showStart;
+    optimisticShowStop = showStop;
+
+    applyRelaySwitchStates(heaterOn, fanOn, exhaustOn);
+    applyStartStopVisibility(showStart, showStop);
+}
+
 // Preset selection callbacks
 static void presetTuyoCb(lv_event_t* e) {
     (void)e;
@@ -189,6 +239,13 @@ static void waterLossSliderCb(lv_event_t* e) {
 // Start drying callback
 static void startDryingCb(lv_event_t* e) {
     (void)e;
+    // Optimistic local state (UI reacts immediately)
+    dryerData.systemState = STATE_DRYING;
+    dryerData.heaterOn = true;
+    dryerData.fanOn = true;
+    dryerData.exhaustOn = false;
+    setOptimisticUiState(true, true, false, false, true);
+
     sendSetTemperature(tempSetpoint);
     sendStartDrying();
     loadScreen(SCREEN_DASHBOARD);
@@ -197,6 +254,13 @@ static void startDryingCb(lv_event_t* e) {
 // Stop drying callback
 static void stopDryingCb(lv_event_t* e) {
     (void)e;
+    // Optimistic local state (UI reacts immediately)
+    dryerData.systemState = STATE_IDLE;
+    dryerData.heaterOn = false;
+    dryerData.fanOn = false;
+    dryerData.exhaustOn = true;
+    setOptimisticUiState(false, false, true, true, false);
+
     sendStopDrying();
 }
 
@@ -452,49 +516,35 @@ void updateControlScreen() {
         { char _b[24]; snprintf(_b, sizeof(_b), "Current: %.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(currentTempLabel, _b); }
     }
 
-    // ---- START/STOP Button Visibility based on System State ----
-    if (lv_obj_is_valid(startDryingBtn) && lv_obj_is_valid(stopDryingBtn)) {
+    // Use optimistic UI briefly after local START/STOP actions.
+    // This prevents waiting for state relay from NodeMCU/Nano.
+    if (uiOptimisticActive && millis() >= uiOptimisticUntilMs) {
+        uiOptimisticActive = false;
+    }
+
+    // ---- START/STOP Button Visibility + Relay indicators ----
+    if (uiOptimisticActive) {
+        applyStartStopVisibility(optimisticShowStart, optimisticShowStop);
+        applyRelaySwitchStates(optimisticHeaterOn, optimisticFanOn, optimisticExhaustOn);
+    } else {
         switch (dryerData.systemState) {
             case STATE_IDLE:
-                lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(true, false);
                 break;
             case STATE_DRYING:
-                lv_obj_add_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(false, true);
                 break;
             case STATE_COMPLETE:
-                lv_obj_add_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
-                break;
             case STATE_ERROR:
-                lv_obj_add_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(false, false);
                 break;
             case STATE_PAUSED:
-                lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_clear_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(true, true);
                 break;
             default:
-                lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
-                lv_obj_add_flag(stopDryingBtn, LV_OBJ_FLAG_HIDDEN);
+                applyStartStopVisibility(true, false);
                 break;
         }
-    }
-
-    // Sync switch states with actual relay states
-    if (lv_obj_is_valid(heaterSwitch)) {
-        if (dryerData.heaterOn) lv_obj_add_state(heaterSwitch, LV_STATE_CHECKED);
-        else lv_obj_clear_state(heaterSwitch, LV_STATE_CHECKED);
-    }
-
-    if (lv_obj_is_valid(fanSwitch)) {
-        if (dryerData.fanOn) lv_obj_add_state(fanSwitch, LV_STATE_CHECKED);
-        else lv_obj_clear_state(fanSwitch, LV_STATE_CHECKED);
-    }
-
-    if (lv_obj_is_valid(exhaustSwitch)) {
-        if (dryerData.exhaustOn) lv_obj_add_state(exhaustSwitch, LV_STATE_CHECKED);
-        else lv_obj_clear_state(exhaustSwitch, LV_STATE_CHECKED);
+        applyRelaySwitchStates(dryerData.heaterOn, dryerData.fanOn, dryerData.exhaustOn);
     }
 }

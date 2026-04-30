@@ -26,7 +26,7 @@ lv_obj_t* createBootScreen() {
     // ---- Logo image (compiled C array) ----
     lv_obj_t* icon = lv_img_create(scr);
     lv_img_set_src(icon, &solaraw);
-    lv_img_set_zoom(icon, 170);  // ~66% scale (256 = 100%)
+    lv_img_set_zoom(icon, 102);  // ~40% scale (256 = 100%)
     lv_obj_align(icon, LV_ALIGN_CENTER, 0, -100);
     Serial.println("[BOOT] Using compiled solaraw image (C array)");
 
