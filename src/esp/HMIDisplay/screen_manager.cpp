@@ -58,9 +58,9 @@ void loadScreen(ScreenId id) {
     // For the one-time boot screen, pass auto_del = true so LVGL removes
     // disp->prev_scr from its internal state *after* the animation ends.
     // This avoids a dangling prev_scr pointer during the fade-in frames.
-    // For all other screens keep auto_del = false so they remain allocated
-    // and can be revisited instantly without re-creation.
-    bool auto_del = (previousScreen == SCREEN_BOOT);
+    // For all other screens, always use auto_del = true to ensure proper cleanup
+    // and prevent memory/event handler accumulation from multiple active screens.
+    bool auto_del = true;
     
     if (screens[id]) {
         lv_scr_load_anim(screens[id], LV_SCR_LOAD_ANIM_FADE_ON, ANIM_SCREEN_TRANS, 0, auto_del);
@@ -80,7 +80,12 @@ void loadScreen(ScreenId id) {
         Serial.println(screenName);
     }
 
-    // Mark boot screen pointer as gone; LVGL owns the object now (auto_del).
+    // Mark screen pointer as gone if it was the previous screen
+    // LVGL now owns and will delete it (auto_del = true)
+    if (previousScreen != SCREEN_BOOT && previousScreen < SCREEN_COUNT) {
+        screens[previousScreen] = NULL;
+    }
+    // Boot screen pointer already handled above
     if (previousScreen == SCREEN_BOOT) {
         screens[SCREEN_BOOT] = NULL;
     }
