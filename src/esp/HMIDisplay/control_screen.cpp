@@ -7,6 +7,7 @@
 #include "dryer_data.h"
 #include "screen_manager.h"
 #include "serial_protocol.h"
+#include "ui_optimistic_state.h"
 
 // Preset enumeration
 enum DryingPreset {
@@ -39,14 +40,6 @@ static DryingPreset selectedPreset = PRESET_OTHERS;
 
 // Optimistic UI state after START/STOP click so indicators/buttons react
 // immediately without waiting for the next status packet from controller.
-static bool uiOptimisticActive = false;
-static unsigned long uiOptimisticUntilMs = 0;
-static bool optimisticHeaterOn = false;
-static bool optimisticFanOn = false;
-static bool optimisticExhaustOn = false;
-static bool optimisticShowStart = true;
-static bool optimisticShowStop = false;
-
 static void applyStartStopVisibility(bool showStart, bool showStop) {
     if (lv_obj_is_valid(startDryingBtn)) {
         if (showStart) lv_obj_clear_flag(startDryingBtn, LV_OBJ_FLAG_HIDDEN);
@@ -71,20 +64,6 @@ static void applyRelaySwitchStates(bool heaterOn, bool fanOn, bool exhaustOn) {
         if (exhaustOn) lv_obj_add_state(exhaustSwitch, LV_STATE_CHECKED);
         else lv_obj_clear_state(exhaustSwitch, LV_STATE_CHECKED);
     }
-}
-
-static void setOptimisticUiState(bool heaterOn, bool fanOn, bool exhaustOn,
-                                 bool showStart, bool showStop) {
-    uiOptimisticActive = true;
-    uiOptimisticUntilMs = millis() + 15000;  // 15-second grace period for status catch-up
-    optimisticHeaterOn = heaterOn;
-    optimisticFanOn = fanOn;
-    optimisticExhaustOn = exhaustOn;
-    optimisticShowStart = showStart;
-    optimisticShowStop = showStop;
-
-    applyRelaySwitchStates(heaterOn, fanOn, exhaustOn);
-    applyStartStopVisibility(showStart, showStop);
 }
 
 // Preset selection callbacks
@@ -244,7 +223,9 @@ static void startDryingCb(lv_event_t* e) {
     dryerData.heaterOn = true;
     dryerData.fanOn = true;
     dryerData.exhaustOn = false;
-    setOptimisticUiState(true, true, false, false, true);
+    uiOptimisticSet(STATE_DRYING, true, true, false, false, true, 15000UL);
+    applyRelaySwitchStates(true, true, false);
+    applyStartStopVisibility(false, true);
 
     sendSetTemperature(tempSetpoint);
     sendStartDrying();
@@ -259,7 +240,9 @@ static void stopDryingCb(lv_event_t* e) {
     dryerData.heaterOn = false;
     dryerData.fanOn = false;
     dryerData.exhaustOn = true;
-    setOptimisticUiState(false, false, true, true, false);
+    uiOptimisticSet(STATE_IDLE, false, false, true, true, false, 15000UL);
+    applyRelaySwitchStates(false, false, true);
+    applyStartStopVisibility(true, false);
 
     sendStopDrying();
 }
@@ -518,14 +501,12 @@ void updateControlScreen() {
 
     // Use optimistic UI briefly after local START/STOP actions.
     // This prevents waiting for state relay from NodeMCU/Nano.
-    if (uiOptimisticActive && millis() >= uiOptimisticUntilMs) {
-        uiOptimisticActive = false;
-    }
+    bool optimisticActive = uiOptimisticIsActive();
 
     // ---- START/STOP Button Visibility + Relay indicators ----
-    if (uiOptimisticActive) {
-        applyStartStopVisibility(optimisticShowStart, optimisticShowStop);
-        applyRelaySwitchStates(optimisticHeaterOn, optimisticFanOn, optimisticExhaustOn);
+    if (optimisticActive) {
+        applyStartStopVisibility(gUiOptimisticState.showStart, gUiOptimisticState.showStop);
+        applyRelaySwitchStates(gUiOptimisticState.heaterOn, gUiOptimisticState.fanOn, gUiOptimisticState.exhaustOn);
     } else {
         switch (dryerData.systemState) {
             case STATE_IDLE:

@@ -8,6 +8,7 @@
 #include "screen_manager.h"
 #include "serial_protocol.h"
 #include "alert_popup.h"
+#include "ui_optimistic_state.h"
 
 // Estimated Time of Completion target humidity (% RH considered "dried")
 #define EDT_TARGET_HUMIDITY_PCT  35.0f
@@ -41,16 +42,6 @@ static DryerState   edt_lastState      = STATE_IDLE;
 
 static void updateIndicator(lv_obj_t* dot, bool isOn);
 
-// Optimistic UI state after START/STOP click for immediate feedback
-static bool uiOptimisticActive = false;
-static unsigned long uiOptimisticUntilMs = 0;
-static bool optimisticHeaterOn = false;
-static bool optimisticFanOn = false;
-static bool optimisticExhaustOn = false;
-static bool optimisticShowStart = true;
-static bool optimisticShowStop = false;
-static DryerState optimisticSystemState = STATE_IDLE;
-
 static void applyStartStopVisibility(bool showStart, bool showStop) {
     if (lv_obj_is_valid(startBtn)) {
         if (showStart) lv_obj_clear_flag(startBtn, LV_OBJ_FLAG_HIDDEN);
@@ -60,23 +51,6 @@ static void applyStartStopVisibility(bool showStart, bool showStop) {
         if (showStop) lv_obj_clear_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
         else lv_obj_add_flag(stopBtn, LV_OBJ_FLAG_HIDDEN);
     }
-}
-
-static void setOptimisticUiState(bool heaterOn, bool fanOn, bool exhaustOn,
-                                 bool showStart, bool showStop, DryerState state) {
-    uiOptimisticActive = true;
-    uiOptimisticUntilMs = millis() + 15000;
-    optimisticHeaterOn = heaterOn;
-    optimisticFanOn = fanOn;
-    optimisticExhaustOn = exhaustOn;
-    optimisticShowStart = showStart;
-    optimisticShowStop = showStop;
-    optimisticSystemState = state;
-
-    applyStartStopVisibility(showStart, showStop);
-    updateIndicator(heaterIndicator, heaterOn);
-    updateIndicator(fanIndicator, fanOn);
-    updateIndicator(exhaustIndicator, exhaustOn);
 }
 
 // Navigation callbacks
@@ -91,7 +65,11 @@ static void startBtnCb(lv_event_t* e) {
     dryerData.fanOn = true;
     dryerData.exhaustOn = false;
     dryerData.dryingStartMs = millis();
-    setOptimisticUiState(true, true, false, false, true, STATE_DRYING);
+    uiOptimisticSet(STATE_DRYING, true, true, false, false, true, 15000UL);
+    applyStartStopVisibility(false, true);
+    updateIndicator(heaterIndicator, true);
+    updateIndicator(fanIndicator, true);
+    updateIndicator(exhaustIndicator, false);
     sendStartDrying();
 }
 
@@ -101,7 +79,11 @@ static void stopBtnCb(lv_event_t* e) {
     dryerData.heaterOn = false;
     dryerData.fanOn = false;
     dryerData.exhaustOn = true;
-    setOptimisticUiState(false, false, true, true, false, STATE_IDLE);
+    uiOptimisticSet(STATE_IDLE, false, false, true, true, false, 15000UL);
+    applyStartStopVisibility(true, false);
+    updateIndicator(heaterIndicator, false);
+    updateIndicator(fanIndicator, false);
+    updateIndicator(exhaustIndicator, true);
     sendStopDrying();
 }
 
@@ -448,16 +430,14 @@ void updateDashboardScreen() {
         }
     }
 
-    if (uiOptimisticActive && millis() >= uiOptimisticUntilMs) {
-        uiOptimisticActive = false;
-    }
-    DryerState effectiveState = uiOptimisticActive ? optimisticSystemState : dryerData.systemState;
+    bool optimisticActive = uiOptimisticIsActive();
+    DryerState effectiveState = optimisticActive ? gUiOptimisticState.systemState : dryerData.systemState;
 
     // Relay indicators
-    if (uiOptimisticActive) {
-        updateIndicator(heaterIndicator, optimisticHeaterOn);
-        updateIndicator(fanIndicator, optimisticFanOn);
-        updateIndicator(exhaustIndicator, optimisticExhaustOn);
+    if (optimisticActive) {
+        updateIndicator(heaterIndicator, gUiOptimisticState.heaterOn);
+        updateIndicator(fanIndicator, gUiOptimisticState.fanOn);
+        updateIndicator(exhaustIndicator, gUiOptimisticState.exhaustOn);
     } else {
         updateIndicator(heaterIndicator, dryerData.heaterOn);
         updateIndicator(fanIndicator, dryerData.fanOn);
@@ -479,8 +459,8 @@ void updateDashboardScreen() {
     }
 
     // ---- START/STOP Button Visibility based on state (or optimistic action) ----
-    if (uiOptimisticActive) {
-        applyStartStopVisibility(optimisticShowStart, optimisticShowStop);
+    if (optimisticActive) {
+        applyStartStopVisibility(gUiOptimisticState.showStart, gUiOptimisticState.showStop);
     } else {
         switch (dryerData.systemState) {
             case STATE_IDLE:
