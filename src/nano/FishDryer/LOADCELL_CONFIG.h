@@ -27,6 +27,21 @@ HX711 scale;
 
 void initLoadCell() {
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+  
+  // Give HX711 time to stabilize after power-up (critical!)
+  delay(500);
+  
+  // Wait for sensor to be ready before any operations
+  uint32_t startWait = millis();
+  while (!scale.is_ready() && (millis() - startWait) < 3000UL) {
+    delay(10);
+  }
+  
+  if (!scale.is_ready()) {
+    Serial.println(F("WARNING: HX711 not responding! Check wiring (D2=DOUT, D3=SCK)."));
+    scale.set_scale(LOADCELL_CALIBRATION_FACTOR);
+    return;
+  }
 
   // Restore calibration factor from EEPROM if a valid save exists
   uint8_t magic;
@@ -34,13 +49,20 @@ void initLoadCell() {
   if (magic == LOADCELL_EEPROM_MAGIC) {
     float savedFactor;
     EEPROM.get(LOADCELL_EEPROM_FACTOR_ADDR, savedFactor);
-    if (savedFactor > 0.0f) {
+    
+    // Validate factor: must be finite, positive, and in reasonable range (100-5000)
+    if (savedFactor > 0.0f && savedFactor < 999999.0f && isfinite(savedFactor)) {
       scale.set_scale(savedFactor);
       Serial.print(F("Load cell: restored calibration factor from EEPROM: "));
       Serial.println(savedFactor, 6);
     } else {
+      // Factor corrupted (inf, NaN, or out of range) - reset EEPROM
+      Serial.print(F("Load cell: EEPROM factor corrupted ("));
+      Serial.print(savedFactor, 2);
+      Serial.println(F("), resetting..."));
+      EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)0);  // clear magic
       scale.set_scale(LOADCELL_CALIBRATION_FACTOR);
-      Serial.println(F("Load cell: EEPROM factor invalid, using default."));
+      Serial.println(F("Load cell: using default factor 1.0. TARE then CALIBRATE:<kg>"));
     }
   } else {
     scale.set_scale(LOADCELL_CALIBRATION_FACTOR);
@@ -48,6 +70,7 @@ void initLoadCell() {
     Serial.println(F("  Send TARE then CALIBRATE:<kg> to calibrate."));
   }
 
+  // Only tare after sensor is confirmed ready and stabilized
   scale.tare();
   Serial.println(F("HX711 load cell ready (KG mode)."));
   Serial.println(F("  -> TARE              zero the scale"));
@@ -86,8 +109,13 @@ float readLoadCell() {
     Serial.println(F("HX711 not ready!"));
     return 0.0f;
   }
+  
+  // Use 100 samples for stable reading (same as working example)
   float kg = scale.get_units(LOADCELL_SAMPLES);
-  if (kg < 0) kg = 0.0f;   // clamp negative noise
+  
+  // Clamp negative values (noise floor)
+  if (kg < 0) kg = 0.0f;
+  
   return kg;
 }
 

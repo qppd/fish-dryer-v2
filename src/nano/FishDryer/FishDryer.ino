@@ -34,6 +34,11 @@ unsigned long dryingStartMs = 0;  // millis when drying started
 // SoftwareSerial to NodeMCU Bridge (D9=RX, D10=TX)
 SoftwareSerial ss(SS_RX_PIN, SS_TX_PIN);
 
+// Physical start/stop button on D11 (OR logic, toggle)
+static bool btn5LastState = HIGH;
+static unsigned long btn5LastDebounceMs = 0;
+static const unsigned long BTN5_DEBOUNCE_MS = 50;
+
 // Line buffers for UART receive (NodeMCU) and Serial Monitor
 static String uartRxBuf;
 static String serialRxBuf;
@@ -119,6 +124,12 @@ void handleUARTLine(const String& line) {
   } else if (line == F("LOADCELL:READ")) {
     CURRENT_WEIGHT = readLoadCell();
     Serial.print(F("Weight: ")); Serial.print(CURRENT_WEIGHT, 3); Serial.println(F(" kg"));
+    if (CURRENT_WEIGHT == 0.0f) {
+      Serial.println(F("⚠ WARNING: Reading is 0. This usually means:"));
+      Serial.println(F("  1. Sensor not calibrated (send TARE then CALIBRATE:1.0)"));
+      Serial.println(F("  2. HX711 not responding (check D2/D3 wiring)"));
+      Serial.println(F("  3. Sensor needs stabilization time"));
+    }
 
   // ── PID commands ─────────────────────────────────────────────────────
   } else if (line == F("PID:START") || line == F("PID_START") || line == F("STATE:1")) {
@@ -189,10 +200,18 @@ void handleUARTLine(const String& line) {
 
   } else if (line.startsWith(F("CALIBRATE:"))) {
     calibrateLoadCell(line.substring(10).toFloat());
+  
+  } else if (line == F("LOADCELL:RESET")) {
+    Serial.println(F("Resetting HX711 EEPROM..."));
+    EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)0);
+    scale.set_scale(1.0f);
+    scale.tare();
+    Serial.println(F("EEPROM cleared. Calibration factor reset to 1.0"));
+    Serial.println(F("Now send: TARE, place 1kg weight, then CALIBRATE:1.0"));
 
   } else {
     Serial.println(F("Unknown command. Available: SSR1:1, SSR1:0, SSR2:1, SSR2:0, SSR3:1, SSR3:0,"));
-    Serial.println(F("  SHT31:READ, LOADCELL:READ, STATUS, STATUS?,"));
+    Serial.println(F("  SHT31:READ, LOADCELL:READ, LOADCELL:RESET, STATUS, STATUS?,"));
     Serial.println(F("  PID:START, PID:STOP, PID:SET:<°C>, PID:READ,"));
     Serial.println(F("  SETPOINT:<°C>, WATER_LOSS:<%, PAUSE, RESUME, TARE, CALIBRATE:<kg>"));
   }
@@ -212,10 +231,14 @@ void setup() {
   initPID();
   Serial.println(F("PID controller initialized."));
 
-  // SoftwareSerial to NodeMCU Bridge (D9=RX, D10=TX)
+// SoftwareSerial to NodeMCU Bridge (D9=RX, D10=TX)
   uartRxBuf.reserve(128);
   serialRxBuf.reserve(128);
   ss.begin(SS_UART_BAUD);
+
+  // Physical start/stop button on D11
+  pinMode(BUTTON5_PIN, INPUT_PULLUP);
+  Serial.println(F("Start/Stop button initialized on D11 (INPUT_PULLUP)."));
 
   Serial.print(F("READY  UART D9(RX)/D10(TX) baud="));
   Serial.println(SS_UART_BAUD);
@@ -256,11 +279,49 @@ void loop() {
       }
       uartRxBuf = "";
     } else if (c != '\r') {
-      if (uartRxBuf.length() < 120) uartRxBuf += c;
+if (uartRxBuf.length() < 120) uartRxBuf += c;
     }
   }
 
-  // Process commands from Serial Monitor (USB Serial)
+  // ── Physical start/stop button on D11 (debounced toggle) ──────────────
+  {
+    unsigned long now = millis();
+    bool reading = digitalRead(BUTTON5_PIN);
+
+    if (reading != btn5LastState) {
+      btn5LastDebounceMs = now;
+    }
+
+    if ((now - btn5LastDebounceMs) > BTN5_DEBOUNCE_MS) {
+      // Falling edge: button pressed (LOW = pressed with INPUT_PULLUP)
+      if (reading == LOW && btn5LastState == HIGH) {
+        if (systemState == STATE_IDLE || systemState == STATE_COMPLETE) {
+          // Start drying — reuses the exact same logic as PID_START / CMD_START_DRYING
+          CURRENT_WEIGHT     = readLoadCell();
+          INITIAL_WEIGHT     = CURRENT_WEIGHT;
+          CURRENT_WATER_LOSS = 0.0f;
+          dryingStartMs      = millis();
+          PID_ENABLED        = true;
+          systemState        = STATE_DRYING;
+          Serial.println(F("[BTN5] Drying STARTED"));
+        } else if (systemState == STATE_PAUSED) {
+          PID_ENABLED        = true;
+          systemState        = STATE_DRYING;
+          Serial.println(F("[BTN5] Drying RESUMED"));
+        } else {
+          // STATE_DRYING → stop
+          PID_ENABLED = false;
+          systemState = STATE_IDLE;
+          operateSSR(1, false); operateSSR(2, false); operateSSR(3, false);
+          Serial.println(F("[BTN5] Drying STOPPED"));
+        }
+      }
+    }
+
+    btn5LastState = reading;
+  }
+
+  // ── Process commands from Serial Monitor (USB Serial) ─────────────────
   while (Serial.available()) {
     char c = (char)Serial.read();
     if (c == '\n') {

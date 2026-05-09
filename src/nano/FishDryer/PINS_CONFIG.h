@@ -1,4 +1,6 @@
 // PINS_CONFIG.h
+
+
 // Centralized pin assignments for all hardware modules (Arduino Nano)
 //
 // Notes:
@@ -72,6 +74,13 @@
 
 #ifndef LOADCELL_SCK_PIN
 #define LOADCELL_SCK_PIN 3
+#endif
+
+// =========================
+// Physical Start/Stop Button (OR logic, toggle)
+// =========================
+#ifndef BUTTON5_PIN
+#define BUTTON5_PIN 11      // D11 — physical start/stop button (INPUT_PULLUP, GND)
 #endif
 
 #endif // PINS_CONFIG_H
