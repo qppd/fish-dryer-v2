@@ -119,6 +119,12 @@ void handleUARTLine(const String& line) {
   } else if (line == F("LOADCELL:READ")) {
     CURRENT_WEIGHT = readLoadCell();
     Serial.print(F("Weight: ")); Serial.print(CURRENT_WEIGHT, 3); Serial.println(F(" kg"));
+    if (CURRENT_WEIGHT == 0.0f) {
+      Serial.println(F("⚠ WARNING: Reading is 0. This usually means:"));
+      Serial.println(F("  1. Sensor not calibrated (send TARE then CALIBRATE:1.0)"));
+      Serial.println(F("  2. HX711 not responding (check D2/D3 wiring)"));
+      Serial.println(F("  3. Sensor needs stabilization time"));
+    }
 
   // ── PID commands ─────────────────────────────────────────────────────
   } else if (line == F("PID:START") || line == F("PID_START") || line == F("STATE:1")) {
@@ -189,10 +195,18 @@ void handleUARTLine(const String& line) {
 
   } else if (line.startsWith(F("CALIBRATE:"))) {
     calibrateLoadCell(line.substring(10).toFloat());
+  
+  } else if (line == F("LOADCELL:RESET")) {
+    Serial.println(F("Resetting HX711 EEPROM..."));
+    EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)0);
+    scale.set_scale(1.0f);
+    scale.tare();
+    Serial.println(F("EEPROM cleared. Calibration factor reset to 1.0"));
+    Serial.println(F("Now send: TARE, place 1kg weight, then CALIBRATE:1.0"));
 
   } else {
     Serial.println(F("Unknown command. Available: SSR1:1, SSR1:0, SSR2:1, SSR2:0, SSR3:1, SSR3:0,"));
-    Serial.println(F("  SHT31:READ, LOADCELL:READ, STATUS, STATUS?,"));
+    Serial.println(F("  SHT31:READ, LOADCELL:READ, LOADCELL:RESET, STATUS, STATUS?,"));
     Serial.println(F("  PID:START, PID:STOP, PID:SET:<°C>, PID:READ,"));
     Serial.println(F("  SETPOINT:<°C>, WATER_LOSS:<%, PAUSE, RESUME, TARE, CALIBRATE:<kg>"));
   }
