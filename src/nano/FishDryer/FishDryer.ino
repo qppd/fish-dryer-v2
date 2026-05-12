@@ -204,11 +204,10 @@ void handleUARTLine(const String& line) {
   } else if (line == F("LOADCELL:RESET")) {
     Serial.println(F("Resetting HX711 EEPROM..."));
     EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)0);
-    delay(20);  // Ensure EEPROM write completes
-    scale.set_scale(1.0f);
+scale.set_scale(1.0f);
     scale.tare();
-    Serial.println(F("✓ EEPROM cleared. Calibration factor reset to 1.0"));
-    Serial.println(F("  Now send: TARE, place 1kg weight, then CALIBRATE:1.0"));
+    Serial.println(F("EEPROM cleared. Calibration factor reset to 1.0"));
+    Serial.println(F("Now send: TARE, place 1kg weight, then CALIBRATE:1.0"));
 
   } else {
     Serial.println(F("Unknown command. Available: SSR1:1, SSR1:0, SSR2:1, SSR2:0, SSR3:1, SSR3:0,"));

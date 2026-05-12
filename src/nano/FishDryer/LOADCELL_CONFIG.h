@@ -44,31 +44,27 @@ void initLoadCell() {
   }
 
   // Restore calibration factor from EEPROM if a valid save exists
-  uint8_t magic;
+uint8_t magic;
   EEPROM.get(LOADCELL_EEPROM_MAGIC_ADDR, magic);
-  
-  Serial.print(F("Load cell: checking EEPROM magic byte... "));
-  Serial.print(F("(expected 0x")); Serial.print(LOADCELL_EEPROM_MAGIC, HEX);
-  Serial.print(F(", found 0x")); Serial.print(magic, HEX); Serial.println(F(")"));
-  
+
   if (magic == LOADCELL_EEPROM_MAGIC) {
     float savedFactor;
     EEPROM.get(LOADCELL_EEPROM_FACTOR_ADDR, savedFactor);
     
     // Validate factor: must be finite, positive, and in reasonable range (100-5000)
-    if (savedFactor > 0.0f && savedFactor < 999999.0f && isfinite(savedFactor)) {
+if (savedFactor > 0.0f && savedFactor < 999999.0f && isfinite(savedFactor)) {
       scale.set_scale(savedFactor);
-      Serial.print(F("✓ Load cell: restored calibration factor from EEPROM: "));
+      Serial.print(F("Load cell: restored calibration factor from EEPROM: "));
       Serial.println(savedFactor, 6);
     } else {
       // Factor corrupted (inf, NaN, or out of range) - reset EEPROM
-      Serial.print(F("✗ Load cell: EEPROM factor corrupted ("));
+      Serial.print(F("Load cell: EEPROM factor corrupted ("));
       Serial.print(savedFactor, 2);
       Serial.println(F("), resetting..."));
       EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)0);  // clear magic
       delay(20);  // Ensure write completes
       scale.set_scale(LOADCELL_CALIBRATION_FACTOR);
-      Serial.println(F("  Using default factor 1.0. Send: TARE, then CALIBRATE:<kg>"));
+      Serial.println(F("Load cell: using default factor 1.0. TARE then CALIBRATE:<kg>"));
     }
   } else {
     scale.set_scale(LOADCELL_CALIBRATION_FACTOR);
@@ -99,42 +95,14 @@ void calibrateLoadCell(float known_kg) {
   scale.calibrate_scale(known_kg, LOADCELL_SAMPLES);
   float factor = scale.get_scale();
 
-  // Persist to EEPROM so it survives power cycles
-  // Write magic byte first
+// Persist to EEPROM so it survives power cycles
   EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)LOADCELL_EEPROM_MAGIC);
-  
-  // Small delay to ensure first write completes
-  delay(10);
-  
-  // Write the calibration factor
   EEPROM.put(LOADCELL_EEPROM_FACTOR_ADDR, factor);
-  
-  // Critical delay: EEPROM write needs time to complete
-  // (Arduino Nano EEPROM write is ~3.3ms per byte, so 4 bytes ≈ 13ms)
-  delay(20);
-
-  // Verify the write was successful by reading back
-  uint8_t magic_verify;
-  float factor_verify;
-  EEPROM.get(LOADCELL_EEPROM_MAGIC_ADDR, magic_verify);
-  EEPROM.get(LOADCELL_EEPROM_FACTOR_ADDR, factor_verify);
-  
-  bool writeSuccess = (magic_verify == LOADCELL_EEPROM_MAGIC) && 
-                      (factor_verify == factor);
 
   Serial.println(F("--- Calibration complete ---"));
   Serial.print(  F("Calibration factor: "));
   Serial.println(factor, 6);
-  
-  if (writeSuccess) {
-    Serial.println(F("✓ Factor successfully saved to EEPROM. Will be restored on next power-up."));
-  } else {
-    Serial.println(F("✗ ERROR: EEPROM write verification FAILED!"));
-    Serial.print(  F("  Expected magic: 0x")); Serial.println(LOADCELL_EEPROM_MAGIC, HEX);
-    Serial.print(  F("  Read magic: 0x")); Serial.println(magic_verify, HEX);
-    Serial.print(  F("  Expected factor: ")); Serial.println(factor, 6);
-    Serial.print(  F("  Read factor: ")); Serial.println(factor_verify, 6);
-  }
+  Serial.println(F("Factor saved to EEPROM. Will be restored on next power-up."));
 }
 
 // Returns weight in KG. Returns 0 if sensor not ready.
