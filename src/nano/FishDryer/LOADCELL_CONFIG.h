@@ -16,7 +16,7 @@
 #define LOADCELL_CALIBRATION_FACTOR  1.0f   // default (uncalibrated)
 
 // Number of samples averaged per reading
-#define LOADCELL_SAMPLES  10
+#define LOADCELL_SAMPLES  100
 
 // EEPROM layout (2 bytes magic + 4 bytes float = 6 bytes total)
 #define LOADCELL_EEPROM_MAGIC       0xBF

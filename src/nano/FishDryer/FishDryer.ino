@@ -34,6 +34,11 @@ unsigned long dryingStartMs = 0;  // millis when drying started
 // SoftwareSerial to NodeMCU Bridge (D9=RX, D10=TX)
 SoftwareSerial ss(SS_RX_PIN, SS_TX_PIN);
 
+// Physical start/stop button on D11 (OR logic, toggle)
+static bool btn5LastState = HIGH;
+static unsigned long btn5LastDebounceMs = 0;
+static const unsigned long BTN5_DEBOUNCE_MS = 50;
+
 // Line buffers for UART receive (NodeMCU) and Serial Monitor
 static String uartRxBuf;
 static String serialRxBuf;
@@ -226,10 +231,14 @@ void setup() {
   initPID();
   Serial.println(F("PID controller initialized."));
 
-  // SoftwareSerial to NodeMCU Bridge (D9=RX, D10=TX)
+// SoftwareSerial to NodeMCU Bridge (D9=RX, D10=TX)
   uartRxBuf.reserve(128);
   serialRxBuf.reserve(128);
   ss.begin(SS_UART_BAUD);
+
+  // Physical start/stop button on D11
+  pinMode(BUTTON5_PIN, INPUT_PULLUP);
+  Serial.println(F("Start/Stop button initialized on D11 (INPUT_PULLUP)."));
 
   Serial.print(F("READY  UART D9(RX)/D10(TX) baud="));
   Serial.println(SS_UART_BAUD);
@@ -270,11 +279,49 @@ void loop() {
       }
       uartRxBuf = "";
     } else if (c != '\r') {
-      if (uartRxBuf.length() < 120) uartRxBuf += c;
+if (uartRxBuf.length() < 120) uartRxBuf += c;
     }
   }
 
-  // Process commands from Serial Monitor (USB Serial)
+  // ── Physical start/stop button on D11 (debounced toggle) ──────────────
+  {
+    unsigned long now = millis();
+    bool reading = digitalRead(BUTTON5_PIN);
+
+    if (reading != btn5LastState) {
+      btn5LastDebounceMs = now;
+    }
+
+    if ((now - btn5LastDebounceMs) > BTN5_DEBOUNCE_MS) {
+      // Falling edge: button pressed (LOW = pressed with INPUT_PULLUP)
+      if (reading == LOW && btn5LastState == HIGH) {
+        if (systemState == STATE_IDLE || systemState == STATE_COMPLETE) {
+          // Start drying — reuses the exact same logic as PID_START / CMD_START_DRYING
+          CURRENT_WEIGHT     = readLoadCell();
+          INITIAL_WEIGHT     = CURRENT_WEIGHT;
+          CURRENT_WATER_LOSS = 0.0f;
+          dryingStartMs      = millis();
+          PID_ENABLED        = true;
+          systemState        = STATE_DRYING;
+          Serial.println(F("[BTN5] Drying STARTED"));
+        } else if (systemState == STATE_PAUSED) {
+          PID_ENABLED        = true;
+          systemState        = STATE_DRYING;
+          Serial.println(F("[BTN5] Drying RESUMED"));
+        } else {
+          // STATE_DRYING → stop
+          PID_ENABLED = false;
+          systemState = STATE_IDLE;
+          operateSSR(1, false); operateSSR(2, false); operateSSR(3, false);
+          Serial.println(F("[BTN5] Drying STOPPED"));
+        }
+      }
+    }
+
+    btn5LastState = reading;
+  }
+
+  // ── Process commands from Serial Monitor (USB Serial) ─────────────────
   while (Serial.available()) {
     char c = (char)Serial.read();
     if (c == '\n') {

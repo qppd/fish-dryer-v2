@@ -294,6 +294,53 @@ The HMI touchscreen provides an intuitive interface with pre-configured drying p
 - **Control Panel:** Preset selection buttons, manual temperature controls, relay toggle switches, auto/manual mode selection, target water loss slider
 - **Diagnostics:** Sensor health status (SHT31, HX711), power readings, controller link status, system uptime, scale calibration wizard
 
+#### 3.1 HMI Runtime Communication (Current Implementation)
+
+The current HMI transport is **ESP-Now via NodeMCUBridge** (not direct UART from HMI to Nano):
+
+- `HMIDisplay (ESP32-S3)` ⇄ `ESP-Now` ⇄ `NodeMCUBridge (ESP8266)` ⇄ `SoftwareSerial` ⇄ `Nano FishDryer`
+- HMI side protocol implementation: `src/esp/HMIDisplay/serial_protocol.cpp`
+- Shared binary packet definitions: `src/esp/HMIDisplay/espnow_protocol.h`
+- Bridge forwarding logic: `src/esp/NodeMCUBridge/NodeMCUBridge.ino`
+
+**Important runtime behavior:**
+- HMI marks controller disconnected after ~6s without valid status updates (`STATUS_TIMEOUT_MS = 6000`)
+- NodeMCUBridge polls/sends status on a periodic interval (~2s in current bridge code)
+
+#### 3.2 Boot Screen (Current Implementation)
+
+Current HMI boot screen behavior:
+
+- Boot screen is created first by `screen_manager` (`SCREEN_BOOT`)
+- Uses compiled image asset `solaraw` (C array), not SD runtime loading
+- Uses static (non-animated) boot UI to reduce flicker
+- Automatically transitions to dashboard after 3 seconds (one-shot LVGL timer)
+
+Files:
+- `src/esp/HMIDisplay/boot_screen.cpp`
+- `src/esp/HMIDisplay/solaraw.h`
+- `src/esp/HMIDisplay/solaraw.c` (includes shared sample asset)
+
+#### 3.3 START/STOP Optimistic UI (Dashboard + Control)
+
+To improve responsiveness, START/STOP now uses an optimistic UI layer in HMI:
+
+- UI updates immediately on button press (without waiting for Nano state echo)
+- Applied consistently on both `Dashboard` and `Control` screens
+- Shared cross-screen optimistic state is stored in:
+  - `src/esp/HMIDisplay/ui_optimistic_state.h`
+  - `src/esp/HMIDisplay/ui_optimistic_state.cpp`
+- Current grace window is **15 seconds** before full fallback to live status packets
+
+**Immediate optimistic mapping:**
+- **START pressed:** `DRYING`, Heater=ON, Convection=ON, Exhaust=OFF, show STOP
+- **STOP pressed:** `IDLE`, Heater=OFF, Convection=OFF, Exhaust=ON, show START
+
+Dashboard also applies this optimistic state to:
+- state badge (`IDLE`/`DRYING`)
+- elapsed-time visibility
+- EDT visibility/updates
+
 #### 4. Button Interaction System
 
 Four tactile buttons provide local user control with debouncing and press-duration detection.
@@ -635,6 +682,16 @@ Review `src/esp/FishDryer/PINS_CONFIG.h` and adjust GPIO assignments to match yo
 4. Select **COM Port:** (your ESP32 port)
 5. Click **Upload** ⬆️
 
+#### 4.1 HMI + NodeMCUBridge Pairing (ESP-Now)
+
+When using the HMI stack (`src/esp/HMIDisplay` + `src/esp/NodeMCUBridge`), set peer MACs on both sides:
+
+1. Flash `NodeMCUBridge` and read its printed MAC.
+2. Set `NODEMCU_PEER_MAC` in `src/esp/HMIDisplay/serial_protocol.cpp` to the bridge MAC.
+3. Flash `HMIDisplay` and read its printed MAC.
+4. Set `HMI_PEER_MAC` in `src/esp/NodeMCUBridge/NodeMCUBridge.ino` to the HMI MAC.
+5. Ensure both use the same `ESPNOW_WIFI_CHANNEL` in `espnow_protocol.h`.
+
 #### 5. Verify Operation
 
 1. Open **Serial Monitor** at **115200 baud**
@@ -814,6 +871,8 @@ void handleShortPress(int buttonIndex) {
 - ✅ Estimated Drying Time (EDT) calculation based on humidity drop rate
 - ✅ Water loss progress tracking with visual progress bar
 - ✅ WiFi/ESP-NOW connectivity to controller
+- ✅ Static 3-second HMI boot screen using compiled `solaraw` C-array image
+- ✅ Cross-screen optimistic START/STOP UI sync (Dashboard + Control, 15s grace)
 
 ### Planned Features (v2.1.0)
 
