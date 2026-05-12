@@ -97,6 +97,7 @@ void calibrateLoadCell(float known_kg) {
 
 // Persist to EEPROM so it survives power cycles
   EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)LOADCELL_EEPROM_MAGIC);
+  delay(50);  // Ensure write completes
   EEPROM.put(LOADCELL_EEPROM_FACTOR_ADDR, factor);
 
   Serial.println(F("--- Calibration complete ---"));
