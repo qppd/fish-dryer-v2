@@ -13,7 +13,7 @@
 // After the first CALIBRATE:<kg> command the computed factor
 // is saved to EEPROM and restored automatically on boot.
 // ===========================================================
-#define LOADCELL_CALIBRATION_FACTOR  1.0f   // default (uncalibrated)
+#define LOADCELL_CALIBRATION_FACTOR  -10697.956054
 
 // Number of samples averaged per reading
 #define LOADCELL_SAMPLES  10
@@ -53,13 +53,13 @@ uint8_t magic;
     
     // Validate factor: must be finite, positive, and in reasonable range (100-5000)
 if (savedFactor > 0.0f && savedFactor < 999999.0f && isfinite(savedFactor)) {
-      scale.set_scale(savedFactor);
+      scale.set_scale(LOADCELL_CALIBRATION_FACTOR);
       Serial.print(F("Load cell: restored calibration factor from EEPROM: "));
-      Serial.println(savedFactor, 6);
+      Serial.println(LOADCELL_CALIBRATION_FACTOR, 6);
     } else {
       // Factor corrupted (inf, NaN, or out of range) - reset EEPROM
       Serial.print(F("Load cell: EEPROM factor corrupted ("));
-      Serial.print(savedFactor, 2);
+      Serial.print(LOADCELL_CALIBRATION_FACTOR, 2);
       Serial.println(F("), resetting..."));
       EEPROM.put(LOADCELL_EEPROM_MAGIC_ADDR, (uint8_t)0);  // clear magic
       delay(20);  // Ensure write completes

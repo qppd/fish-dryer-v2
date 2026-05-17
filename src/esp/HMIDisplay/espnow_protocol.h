@@ -67,7 +67,7 @@
 #define FLAG_SHT31   0x10
 
 // ────────────────────────────────────────────────────────────────────
-// EspNowStatusPacket — NodeMCU → HMI  (34 bytes, well under 250-byte limit)
+// EspNowStatusPacket — NodeMCU → HMI  (38 bytes)
 // ────────────────────────────────────────────────────────────────────
 #pragma pack(push, 1)
 typedef struct {
@@ -82,8 +82,9 @@ typedef struct {
     float    waterLossTarget; // target water loss %
     float    pidOutput;       // PID output
     uint16_t runtimeSeconds;  // seconds since drying started (0 if not drying)
+    uint32_t estimatedEDT;    // Estimated time to completion in seconds
     uint8_t  checksum;        // XOR of bytes [0 .. sizeof-2]
-} EspNowStatusPacket;         // 1+1+1+4+4+4+4+4+4+4+2+1 = 34 bytes
+} EspNowStatusPacket;         // 1+1+1+4+4+4+4+4+4+4+2+4+1 = 38 bytes
 #pragma pack(pop)
 
 // ────────────────────────────────────────────────────────────────────

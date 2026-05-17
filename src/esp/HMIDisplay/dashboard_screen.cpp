@@ -396,15 +396,15 @@ void updateDashboardScreen() {
 
     // Temperature value
     if (lv_obj_is_valid(tempValueLabel)) {
-        { char _b[20]; snprintf(_b, sizeof(_b), "%.1f \xC2\xB0C", dryerData.temperature); lv_label_set_text(tempValueLabel, _b); }
+        { char _b[20]; snprintf(_b, sizeof(_b), "%.1f C", dryerData.temperature); lv_label_set_text(tempValueLabel, _b); }
     }
     if (lv_obj_is_valid(tempTargetLabel)) {
-        { char _b[28]; snprintf(_b, sizeof(_b), "Target: %.0f \xC2\xB0C", dryerData.targetTemp); lv_label_set_text(tempTargetLabel, _b); }
+        { char _b[28]; snprintf(_b, sizeof(_b), "Target: %.0f C", dryerData.targetTemp); lv_label_set_text(tempTargetLabel, _b); }
     }
 
     // Humidity
     if (lv_obj_is_valid(humidityValueLabel)) {
-        { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.humidity); lv_label_set_text(humidityValueLabel, _b); }
+        { char _b[16]; snprintf(_b, sizeof(_b), "%.0f%%RH", dryerData.humidity); lv_label_set_text(humidityValueLabel, _b); }
     }
 
     // Weight
