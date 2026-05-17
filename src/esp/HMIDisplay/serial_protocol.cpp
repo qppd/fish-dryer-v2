@@ -48,6 +48,7 @@ static void applyStatusPacket(const EspNowStatusPacket& pkt) {
     dryerData.targetWaterLoss = pkt.waterLossTarget;
     dryerData.pidOutput       = pkt.pidOutput;
     dryerData.dryingElapsedMs = (unsigned long)pkt.runtimeSeconds * 1000UL;
+    dryerData.estimatedEDT    = pkt.estimatedEDT;
 
     dryerData.lastUpdateMs = millis();
     dryerData.connected    = true;

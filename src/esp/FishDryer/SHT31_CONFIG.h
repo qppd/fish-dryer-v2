@@ -17,29 +17,29 @@ void initSHT31() {
   }
 }
 
-// Update CURRENT_TEMPERATURE global for PID use
+// Global sensor values for system-wide use
 extern double CURRENT_TEMPERATURE;
+extern double CURRENT_HUMIDITY;
 
-void updateTemperature() {
+void updateSensors() {
   float temp = sht31.readTemperature();
+  float hum = sht31.readHumidity();
+
   if (!isnan(temp)) {
     CURRENT_TEMPERATURE = temp;
+  }
+  if (!isnan(hum)) {
+    CURRENT_HUMIDITY = hum;
   }
 }
 
 void readSHT31() {
-  float temp = sht31.readTemperature();
-  float humidity = sht31.readHumidity();
-  if (!isnan(temp) && !isnan(humidity)) {
-    CURRENT_TEMPERATURE = temp; // Update global for PID
-    Serial.print("SHT31 Temp: ");
-    Serial.print(temp);
-    Serial.print(" C, Humidity: ");
-    Serial.print(humidity);
-    Serial.println(" %");
-  } else {
-    Serial.println("Failed to read SHT31 sensor!");
-  }
+  updateSensors();
+  Serial.print("SHT31 Temp: ");
+  Serial.print(CURRENT_TEMPERATURE);
+  Serial.print(" C, Humidity: ");
+  Serial.print(CURRENT_HUMIDITY);
+  Serial.println(" %");
 }
 
 #endif // SHT31_CONFIG_H

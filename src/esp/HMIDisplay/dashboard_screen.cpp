@@ -500,37 +500,18 @@ void updateDashboardScreen() {
         }
     }
 
-    // ---- Estimated Drying Time (EDT) based on humidity decrease ----
-    // Capture start-of-drying sample whenever a new drying session begins
-    if (effectiveState == STATE_DRYING && edt_lastState != STATE_DRYING) {
-        edt_startHumidity = dryerData.humidity;
-        edt_startMs       = millis();
-    }
-    // Clear tracking when drying stops
-    if (effectiveState != STATE_DRYING) {
-        edt_startMs = 0;
-    }
-    edt_lastState = effectiveState;
-
-    if (lv_obj_is_valid(edtLabel) && effectiveState == STATE_DRYING && edt_startMs > 0) {
-        float elapsedMins  = (millis() - edt_startMs) / 60000.0f;
-        float humidityDrop = edt_startHumidity - dryerData.humidity;
-
-        if (elapsedMins >= EDT_MIN_ELAPSED_MINS && humidityDrop >= EDT_MIN_HUMIDITY_DROP) {
-            float ratePerMin = humidityDrop / elapsedMins;          // %RH per minute
-            float remaining  = dryerData.humidity - EDT_TARGET_HUMIDITY_PCT;
-
-            if (remaining <= 0.0f) {
-                lv_label_set_text(edtLabel, "EDT: Done");
+    // ---- Estimated Drying Time (EDT) ----
+    if (lv_obj_is_valid(edtLabel)) {
+        if (dryerData.systemState == STATE_DRYING) {
+            if (dryerData.estimatedEDT == 0 || dryerData.estimatedEDT == 0xFFFFFFFF) {
+                lv_label_set_text(edtLabel, "EDT: ---");
             } else {
-                unsigned long edtMins = (unsigned long)(remaining / ratePerMin);
-                unsigned long edtHrs  = edtMins / 60;
-                lv_label_set_text_fmt(edtLabel, "EDT: %lu:%02lu", edtHrs, edtMins % 60);
+                uint32_t h = dryerData.estimatedEDT / 3600;
+                uint32_t m = (dryerData.estimatedEDT % 3600) / 60;
+                lv_label_set_text_fmt(edtLabel, "EDT: %luH %02luM", h, m);
             }
         } else {
-            lv_label_set_text(edtLabel, "EDT: --:--");
+            lv_label_set_text(edtLabel, "");
         }
-    } else if (lv_obj_is_valid(edtLabel)) {
-        lv_label_set_text(edtLabel, "");
     }
 }

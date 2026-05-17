@@ -64,6 +64,7 @@ struct DryerData {
     unsigned long dryingStartMs;
     unsigned long dryingElapsedMs;
     float initialWeight;
+    uint32_t estimatedEDT;
 };
 
 // Global dryer data instance

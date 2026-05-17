@@ -131,6 +131,7 @@ static void parseNanoJSON(const String& json) {
     cachedStatus.waterLossTarget = jsonFloat(json, "target_loss");
     cachedStatus.pidOutput       = jsonFloat(json, "pid_out");
     cachedStatus.runtimeSeconds  = (uint16_t)jsonInt(json, "runtime");
+    cachedStatus.estimatedEDT    = (uint32_t)jsonInt(json, "edt");
 
     cachedStatus.checksum = espnowStatusChecksum(&cachedStatus);
 }
