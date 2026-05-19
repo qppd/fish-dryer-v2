@@ -31,6 +31,10 @@ bool fanState    = false;
 bool exhaustState = false;
 unsigned long dryingStartMs = 0;  // millis when drying started
 
+// RH-based auto-stop stability counter
+uint8_t humidityStopCounter = 0;
+#define HUMIDITY_STOP_THRESHOLD 5   // must be <= 14% RH for 5 consecutive readings (~10s)
+
 // EDT (Estimated Drying Time) tracking
 unsigned long edt_windowStartMs = 0;     // start of current EDT window
 float         edt_weightAtWindow = 0.0f; // weight at window start
@@ -96,6 +100,7 @@ void sendStatusJSON() {
 }
 
 // Update calculated water loss percentage
+// Clamp to TARGET WATER LOSS so HMIDisplay never shows a value exceeding the target.
 void updateWaterLoss() {
   if (INITIAL_WEIGHT > 0.0f) {
     float lost = INITIAL_WEIGHT - CURRENT_WEIGHT;
@@ -103,6 +108,10 @@ void updateWaterLoss() {
     CURRENT_WATER_LOSS = (lost / INITIAL_WEIGHT) * 100.0f;
   } else {
     CURRENT_WATER_LOSS = 0.0f;
+  }
+  // Clamp: if WATER LOSS > TARGET WATER LOSS, make WATER LOSS = TARGET WATER LOSS
+  if (systemState == STATE_DRYING && CURRENT_WATER_LOSS > WATER_LOSS_TARGET) {
+    CURRENT_WATER_LOSS = WATER_LOSS_TARGET;
   }
 }
 
@@ -213,6 +222,7 @@ void handleUARTLine(const String& line) {
     edt_dryingRate     = 0.0f;
     edt_estimatedSeconds = 0;
     edt_hasValidRate   = false;
+    humidityStopCounter = 0;
     PID_ENABLED        = true;
     systemState        = STATE_DRYING;
     Serial.println(F("PID thermostat control ENABLED. System will maintain temperature automatically."));
@@ -336,13 +346,21 @@ void loop() {
     // (status is sent on demand when NodeMCU sends STATUS?)
     lastPIDUpdate = millis();
 
-    // Auto-stop when water loss target is reached
-    if (systemState == STATE_DRYING && WATER_LOSS_TARGET > 0 &&
-        CURRENT_WATER_LOSS >= WATER_LOSS_TARGET) {
-      PID_ENABLED = false;
-      systemState = STATE_COMPLETE;
-      operateSSR(1, false); operateSSR(2, false); operateSSR(3, false);
-      Serial.println(F("DRYING_COMPLETE"));
+// Auto-stop based on RH (Relative Humidity)
+    // When humidity drops to 14% or below for N consecutive readings, drying is done.
+    if (systemState == STATE_DRYING) {
+      if (CURRENT_HUMIDITY <= 14.0f && CURRENT_HUMIDITY > 0.0f) {
+        humidityStopCounter++;
+        if (humidityStopCounter >= HUMIDITY_STOP_THRESHOLD) {
+          PID_ENABLED = false;
+          systemState = STATE_COMPLETE;
+          operateSSR(1, false); operateSSR(2, false); operateSSR(3, false);
+          Serial.println(F("DRYING_COMPLETE"));
+          Serial.print(F("Final water loss: ")); Serial.print(CURRENT_WATER_LOSS, 1); Serial.println(F("%"));
+        }
+      } else {
+        humidityStopCounter = 0;
+      }
     }
   }
 
@@ -383,6 +401,7 @@ if (systemState == STATE_IDLE || systemState == STATE_COMPLETE) {
           edt_dryingRate     = 0.0f;
           edt_estimatedSeconds = 0;
           edt_hasValidRate   = false;
+          humidityStopCounter = 0;
           PID_ENABLED        = true;
           systemState        = STATE_DRYING;
           Serial.println(F("[BTN5] Drying STARTED"));
