@@ -31,6 +31,16 @@ bool fanState    = false;
 bool exhaustState = false;
 unsigned long dryingStartMs = 0;  // millis when drying started
 
+// EDT (Estimated Drying Time) tracking
+unsigned long edt_windowStartMs = 0;     // start of current EDT window
+float         edt_weightAtWindow = 0.0f; // weight at window start
+float         edt_dryingRate = 0.0f;     // kg/s drying rate (filtered)
+uint32_t      edt_estimatedSeconds = 0;  // EDT in seconds (0 = unknown)
+bool          edt_hasValidRate = false;  // true once we have reliable rate data
+#define EDT_WINDOW_MS       60000UL      // 60-second window for rate calc
+#define EDT_MIN_ELAPSED_MS 180000UL      // 3 minutes min before showing EDT
+#define EDT_RATE_SMOOTH     0.3f         // low-pass filter factor (0-1)
+
 // SoftwareSerial to NodeMCU Bridge (D9=RX, D10=TX)
 SoftwareSerial ss(SS_RX_PIN, SS_TX_PIN);
 
@@ -64,8 +74,9 @@ void sendStatus(Stream& out) {
   out.print(F("\",\"target_temp\":"));     out.print(TEMPERATURE_SETPOINT, 1);
   out.print(F(",\"target_loss\":"));       out.print(WATER_LOSS_TARGET, 1);
   out.print(F(",\"pid_out\":"));           out.print(PID_OUTPUT, 0);
-  out.print(F(",\"runtime\":"));           out.print((systemState == STATE_DRYING)
+out.print(F(",\"runtime\":"));           out.print((systemState == STATE_DRYING)
                                              ? (uint16_t)((millis() - dryingStartMs) / 1000UL) : 0);
+  out.print(F(",\"edt\":"));                out.print(edt_estimatedSeconds);
   out.print(F(",\"fan_a\":0,\"heater_w\":0,\"bat_v\":0,\"sht31\":"));
   out.print(sht31OK ? 1 : 0);
   out.println(F("}"));
@@ -93,6 +104,66 @@ void updateWaterLoss() {
   } else {
     CURRENT_WATER_LOSS = 0.0f;
   }
+}
+
+// Compute Estimated Drying Time based on weight loss trend
+void updateEDT() {
+  if (systemState != STATE_DRYING) {
+    edt_estimatedSeconds = 0;
+    edt_hasValidRate = false;
+    return;
+  }
+
+  unsigned long now = millis();
+  unsigned long elapsed = now - dryingStartMs;
+
+  // Need at least 3 minutes of drying before EDT is meaningful
+  if (elapsed < EDT_MIN_ELAPSED_MS) {
+    edt_estimatedSeconds = 0;
+    return;
+  }
+
+  // Every EDT_WINDOW_MS, calculate rate from the window
+  if (now - edt_windowStartMs >= EDT_WINDOW_MS) {
+    float deltaTime = (float)(now - edt_windowStartMs) / 1000.0f;
+    float deltaWeight = edt_weightAtWindow - CURRENT_WEIGHT;
+
+    if (deltaTime > 0 && deltaWeight > 0.001f) {
+      float windowRate = deltaWeight / deltaTime;  // kg/s in this window
+
+      // Smooth: blend new window rate into existing rate with low-pass filter
+      if (!edt_hasValidRate) {
+        edt_dryingRate = windowRate;
+        edt_hasValidRate = true;
+      } else {
+        edt_dryingRate = (EDT_RATE_SMOOTH * windowRate) +
+                         ((1.0f - EDT_RATE_SMOOTH) * edt_dryingRate);
+      }
+    }
+
+    // Reset window (even if rate was zero this period — don't extend the window)
+    edt_windowStartMs = now;
+    edt_weightAtWindow = CURRENT_WEIGHT;
+  }
+
+  // Compute EDT from current smoothed rate
+  if (edt_hasValidRate && edt_dryingRate > 0.00001f) {
+    // Target weight = initial weight minus target water loss
+    float targetWeight = INITIAL_WEIGHT * (1.0f - (WATER_LOSS_TARGET / 100.0f));
+    if (targetWeight < 0) targetWeight = 0;
+
+    float remainingWeight = CURRENT_WEIGHT - targetWeight;
+    if (remainingWeight < 0) remainingWeight = 0;
+
+    float estimatedSec = remainingWeight / edt_dryingRate;
+
+    // Cap EDT at 48 hours (sanity limit)
+    if (estimatedSec > 172800.0f) estimatedSec = 172800.0f;
+    if (estimatedSec < 60.0f) estimatedSec = 60.0f;
+
+    edt_estimatedSeconds = (uint32_t)estimatedSec;
+  }
+  // If rate is 0 or invalid, keep previous EDT (don't reset to 0)
 }
 
 // Handle one text command line — accepts commands from BOTH NodeMCU UART and Serial Monitor.
@@ -132,11 +203,16 @@ void handleUARTLine(const String& line) {
     }
 
   // ── PID commands ─────────────────────────────────────────────────────
-  } else if (line == F("PID:START") || line == F("PID_START") || line == F("STATE:1")) {
+} else if (line == F("PID:START") || line == F("PID_START") || line == F("STATE:1")) {
     CURRENT_WEIGHT     = readLoadCell();
     INITIAL_WEIGHT     = CURRENT_WEIGHT;
     CURRENT_WATER_LOSS = 0.0f;
     dryingStartMs      = millis();
+    edt_windowStartMs  = millis();
+    edt_weightAtWindow = CURRENT_WEIGHT;
+    edt_dryingRate     = 0.0f;
+    edt_estimatedSeconds = 0;
+    edt_hasValidRate   = false;
     PID_ENABLED        = true;
     systemState        = STATE_DRYING;
     Serial.println(F("PID thermostat control ENABLED. System will maintain temperature automatically."));
@@ -251,6 +327,7 @@ void loop() {
     updateSHT31();
     CURRENT_WEIGHT = readLoadCell();
     updateWaterLoss();
+    updateEDT();
 
     if (PID_ENABLED) {
       pidCOMPUTE();
@@ -295,12 +372,17 @@ if (uartRxBuf.length() < 120) uartRxBuf += c;
     if ((now - btn5LastDebounceMs) > BTN5_DEBOUNCE_MS) {
       // Falling edge: button pressed (LOW = pressed with INPUT_PULLUP)
       if (reading == LOW && btn5LastState == HIGH) {
-        if (systemState == STATE_IDLE || systemState == STATE_COMPLETE) {
+if (systemState == STATE_IDLE || systemState == STATE_COMPLETE) {
           // Start drying — reuses the exact same logic as PID_START / CMD_START_DRYING
           CURRENT_WEIGHT     = readLoadCell();
           INITIAL_WEIGHT     = CURRENT_WEIGHT;
           CURRENT_WATER_LOSS = 0.0f;
           dryingStartMs      = millis();
+          edt_windowStartMs  = millis();
+          edt_weightAtWindow = CURRENT_WEIGHT;
+          edt_dryingRate     = 0.0f;
+          edt_estimatedSeconds = 0;
+          edt_hasValidRate   = false;
           PID_ENABLED        = true;
           systemState        = STATE_DRYING;
           Serial.println(F("[BTN5] Drying STARTED"));

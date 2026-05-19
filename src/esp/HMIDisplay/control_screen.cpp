@@ -509,13 +509,13 @@ void updateControlScreen() {
         applyRelaySwitchStates(gUiOptimisticState.heaterOn, gUiOptimisticState.fanOn, gUiOptimisticState.exhaustOn);
     } else {
         switch (dryerData.systemState) {
-            case STATE_IDLE:
+case STATE_IDLE:
+            case STATE_COMPLETE:
                 applyStartStopVisibility(true, false);
                 break;
             case STATE_DRYING:
                 applyStartStopVisibility(false, true);
                 break;
-            case STATE_COMPLETE:
             case STATE_ERROR:
                 applyStartStopVisibility(false, false);
                 break;

@@ -95,7 +95,8 @@ inline void initDryerData() {
     dryerData.connected = false;
     dryerData.dryingStartMs = 0;
     dryerData.dryingElapsedMs = 0;
-    dryerData.initialWeight = 0.0f;
+dryerData.initialWeight = 0.0f;
+    dryerData.estimatedEDT = 0;
 }
 
 #endif // DRYER_DATA_H

@@ -412,9 +412,21 @@ void updateDashboardScreen() {
         { char _b[12]; snprintf(_b, sizeof(_b), "%.1f kg", dryerData.weight); lv_label_set_text(weightValueLabel, _b); }
     }
 
-    // Water loss
+// Water loss
     if (lv_obj_is_valid(waterLossLabel)) {
-        { char _b[12]; snprintf(_b, sizeof(_b), "%.0f%%", dryerData.waterLoss); lv_label_set_text(waterLossLabel, _b); }
+        // If we have initialWeight locally and the Nano's value seems stale,
+        // recompute as a safety net
+        float wl = dryerData.waterLoss;
+        if (wl == 0.0f && dryerData.initialWeight > 0.0f && dryerData.initialWeight > dryerData.weight) {
+            float lost = dryerData.initialWeight - dryerData.weight;
+            wl = (lost / dryerData.initialWeight) * 100.0f;
+            if (wl < 0) wl = 0;
+        }
+        if (wl >= 0.01f) {
+            { char _b[12]; snprintf(_b, sizeof(_b), "%.1f%%", wl); lv_label_set_text(waterLossLabel, _b); }
+        } else {
+            lv_label_set_text(waterLossLabel, "--%");
+        }
     }
     if (lv_obj_is_valid(waterLossBar)) {
         int wlVal = (int)dryerData.waterLoss;
@@ -463,16 +475,16 @@ void updateDashboardScreen() {
         applyStartStopVisibility(gUiOptimisticState.showStart, gUiOptimisticState.showStop);
     } else {
         switch (dryerData.systemState) {
-            case STATE_IDLE:
-                applyStartStopVisibility(true, false);
-                break;
-            case STATE_DRYING:
-                applyStartStopVisibility(false, true);
-                break;
-            case STATE_COMPLETE:
-            case STATE_ERROR:
-                applyStartStopVisibility(false, false);
-                break;
+case STATE_IDLE:
+        case STATE_COMPLETE:
+            applyStartStopVisibility(true, false);
+            break;
+        case STATE_DRYING:
+            applyStartStopVisibility(false, true);
+            break;
+        case STATE_ERROR:
+            applyStartStopVisibility(false, false);
+            break;
             case STATE_PAUSED:
                 applyStartStopVisibility(true, true);
                 break;
